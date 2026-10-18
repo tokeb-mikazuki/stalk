@@ -74,6 +74,8 @@ class Mix:
         wl = fftconvolve(self.wet[0], ir)[: self.n]
         wr = fftconvolve(self.wet[1], irR)[: self.n]
         out = self.dry + np.stack([wl, wr]) * 0.22
+        if getattr(self, 'duck', None) is not None:
+            out = out * self.duck
         # 큰 타격음 기준으로 레벨을 맞추고(99.98 백분위), 넘치는 순간만 부드럽게 눌러 준다
         ref = np.percentile(np.abs(out), 99.98)
         out = out / ref * 0.8
@@ -250,6 +252,86 @@ def drone(d):
     return base * 0.35 + air * 0.4
 
 
+def pad(d):
+    """평온한 장조 화음 (부드럽게 숨쉬듯)"""
+    t = t_arr(d)
+    s = 0
+    for f in (261.6, 329.6, 392.0, 523.3):
+        s = s + np.sin(2 * np.pi * f * t + 0.5 * np.sin(2 * np.pi * 0.2 * t)) + 0.3 * np.sin(2 * np.pi * f * 2.003 * t)
+    return lp(s, 1800) * (0.6 + 0.4 * np.sin(2 * np.pi * 0.09 * t)) * 0.12
+
+
+def buzz(d=0.18):
+    """형광등이 떨릴 때의 전기 소리"""
+    t = t_arr(d)
+    b = np.sign(np.sin(2 * np.pi * 120 * t)) * 0.4 + bp(noise(d), 2000, 6000) * 0.5
+    return b * env_exp(d, 0.08, 0.002)
+
+
+def typekey():
+    d = 0.05
+    return (bp(noise(d), 1500, 5000) * env_exp(d, 0.006) + np.sin(2 * np.pi * 180 * t_arr(d)) * env_exp(d, 0.01) * 0.3) * 0.8
+
+
+def strings(d):
+    """불협화 현악 트레몰로 — 점점 크게"""
+    t = t_arr(d)
+    s = 0
+    for f in (220, 233.1, 311.1, 329.6, 466.2):
+        saw = 2 * ((f * t * (1 + 0.003 * np.sin(2 * np.pi * 0.7 * t))) % 1) - 1
+        s = s + saw
+    trem = 0.6 + 0.4 * np.sign(np.sin(2 * np.pi * 11 * t))
+    return lp(s, 3000) * trem * (t / d) ** 1.5 * 0.25
+
+
+def load_wav(path):
+    import subprocess
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-f', 'f32le', '-ac', '1', '-ar', str(SR), '-'],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(raw, np.float32).astype(np.float64)
+
+
+def voice(vid, style):
+    """안내 방송 음성. style: pa(건물 스피커) · warp(늘어짐) · crush(뭉개짐) · deep(낮게) · stutter(끊김) · close(귓가)"""
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice', f'{vid}.mp3')
+    if not os.path.exists(path):
+        return None
+    x = load_wav(path)
+    x = x / (np.max(np.abs(x)) + 1e-9)
+    if style in ('pa', 'warp', 'crush', 'stutter', 'deep'):
+        x = bp(x, 320, 3400, 2) * 1.6  # 천장 스피커
+    if style == 'warp':  # 테이프가 늘어지듯 흔들림
+        n = len(x)
+        idx = np.arange(n) * (1 - 0.035 * (np.arange(n) / n)) + 300 * np.sin(2 * np.pi * 0.6 * np.arange(n) / SR)
+        x = np.interp(np.clip(idx, 0, n - 1), np.arange(n), x)
+    if style == 'crush':
+        x = np.round(x * 10) / 10
+        x = np.repeat(x[::4], 4)[: len(x)]
+        x = x * (0.75 + 0.25 * np.sign(np.sin(2 * np.pi * 7 * np.arange(len(x)) / SR)))
+    if style == 'deep':  # 낮고 느리게
+        n = len(x)
+        idx = np.arange(int(n * 1.18)) / 1.18
+        x = np.interp(idx, np.arange(n), x)
+        x = lp(x, 2400)
+    if style == 'stutter':  # 몇 군데가 되감기듯 반복
+        out, i, n = [], 0, len(x)
+        while i < n:
+            seg = int(rng.uniform(0.12, 0.3) * SR)
+            chunk = x[i:i + seg]
+            out.append(chunk)
+            if rng.random() < 0.3:
+                out.append(chunk[: int(len(chunk) * 0.5)] * 0.9)
+            if rng.random() < 0.15:
+                out.append(np.zeros(int(0.06 * SR)))
+            i += seg
+        x = np.concatenate(out)
+        x = np.tanh(x * 2.2) / 1.6
+    if style == 'close':  # 귓가에서 속삭이듯 (건조하고 가까이)
+        x = lp(x, 6000) * 1.1
+    return x
+
+
 # ---------------------------------------------------------------- 타임라인
 def main():
     data = json.load(open(sys.argv[1]))
@@ -263,118 +345,154 @@ def main():
     ends = {n: (shots[order[i + 1]] if i + 1 < len(order) else dur) for i, n in enumerate(order)}
     m = Mix(dur + 0.5)
 
-    # 바탕 드론: 샷마다 세기 조절
-    dr = drone(dur + 0.5)
-    level = np.zeros_like(dr)
-    lv = {'coldopen': 0.0, 'title': 0.5, 'climb': 0.6, 'well': 0.85, 'elevator': 0.5, 'descend': 0.35, 'card1': 0.45,
-          'cctv': 0.6, 'grid': 0.8, 'card2': 0.9, 'chase': 1.1, 'flash': 1.0, 'card3': 0.0, 'trap': 0.35, 'logo': 0.9}
+    def S(name, default=None):
+        return shots.get(name, default)
+
+    def E(name):
+        return ends.get(name, dur)
+
+    # ---- 바탕: 평온한 패드 → 불길한 드론 (긴장도 곡선) ----
+    tension = {'title': 0.0, 'climb': 0.05, 'well': 0.1, 'elevEmpty': 0.12, 'glimpse': 0.35, 'elevator': 0.5,
+               'descend': 0.6, 'card1': 0.55, 'cctv': 0.7, 'grid': 0.8, 'card2': 0.85, 'chase': 1.0, 'flash': 1.0,
+               'card3': 0.0, 'trap': 0.45, 'logo': 0.7}
+    curve = np.zeros(m.n)
     for n in order:
         a, b = int(shots[n] * SR), int(ends[n] * SR)
-        level[a:b] = lv.get(n, 0.5)
-    k = np.ones(int(0.4 * SR)) / int(0.4 * SR)
-    level = fftconvolve(level, k, mode='same')
-    m.add(0, dr * level, 0.32, rev=0.3)
+        curve[a:b] = tension.get(n, 0.5)
+    k = np.ones(int(1.2 * SR)) / int(1.2 * SR)
+    curve = np.clip(fftconvolve(curve, k, mode='same'), 0, 1)
+    dr = drone(dur + 0.5)[: m.n]
+    m.add(0, dr * curve[: len(dr)] ** 1.3, 0.45, rev=0.3)
+    calm = np.clip(1 - curve * 3, 0, 1)
+    m.add(0, pad(dur + 0.5)[: m.n] * calm[: m.n], 0.22, rev=0.6)
+    m.add(0, lp(noise(dur + 0.5), 500)[: m.n] * 0.08, 1.0, rev=0.2)  # 실내 공기
 
-    # 콜드 오프닝: 잡음 → 한 순간의 얼굴 → 정적
-    if 'coldflash' in marks:
-        cf = marks['coldflash']
-        m.add(0, static(cf), 0.5, rev=0.05)
-        m.add(cf - 0.01, sting(1.8), 0.7, rev=0.4)
-        m.add(cf - 0.01, boom(3.0, 48), 0.8, rev=0.5)
-        m.add(cf, glitch(0.3), 0.8)
-    # 막 사이 카드: 초침 · 숨
-    if 'card1' in shots:
-        c1 = shots['card1']
-        for i in range(4):
-            m.add(c1 + 0.1 + i * 0.45, click(), 0.6, pan=(-0.3 if i % 2 else 0.3), rev=0.3)
-        m.add(c1 + 0.05, heartbeat(60), 1.0, rev=0.1)
-    if 'card2' in shots:
-        m.add(shots['card2'] + 0.2, bp(noise(0.9), 300, 2500) * env_exp(0.9, 0.4, 0.3), 0.25, rev=0.2)  # 숨 들이켬
-        m.add(shots['chase'] - 0.02, boom(3.0, 52), 0.9, rev=0.4)
-    if 'flash' in marks:
-        m.add(marks['flash'] - 0.01, sting(1.6), 0.8, rev=0.3)
-        m.add(marks['flash'] - 0.01, boom(2.0, 40), 0.7, rev=0.3)
-        m.add(marks['flash'], glitch(0.4), 0.9)
+    # ---- 자장가 오르골: 평온하게 시작해 점점 늘어지고 어긋나다가, 그것이 보이는 순간 끊긴다 ----
+    lull = [523.3, 659.3, 784.0, 659.3, 587.3, 698.5, 880.0, 784.0, 659.3, 523.3, 587.3, 493.9, 523.3]
+    stop_at = marks.get('figSeen', S('elevator', dur))
+    t, i = S('title', 0) + 0.8, 0
+    while t < stop_at - 0.1:
+        prog = np.clip((t - S('glimpse', t + 99)) / max(0.5, stop_at - S('glimpse', 0)), 0, 1) if 'glimpse' in shots else 0
+        f = lull[i % len(lull)] * (1 - 0.06 * prog) * (1 + rng.normal(0, 0.004 * prog))
+        m.add(t, musicbox(f), 0.13 * (1 - 0.4 * prog), pan=(-0.25 if i % 2 else 0.25), rev=0.65)
+        t += 0.55 * (1 + 0.9 * prog)
+        i += 1
 
-    # 오르골 모티프 (도입부 · 로고)
-    motif = [659.3, 493.9, 523.3, 440.0, 392.0, 440.0, 329.6]
-    t0 = shots['title'] + 0.6
-    for i, f in enumerate(motif):
-        m.add(t0 + i * 1.25, musicbox(f), 0.16, pan=(-0.3 if i % 2 else 0.3), rev=0.7)
-    # 계단 오를 때 한 번 더 (한 옥타브 아래, 느리게)
-    for i, f in enumerate(motif[:4]):
-        m.add(shots['climb'] + 0.3 + i * 1.2, musicbox(f / 2), 0.12, rev=0.7)
-
-    # 게임 내 사운드 이벤트
+    # ---- 게임 사운드 이벤트 ----
     for e in evs:
         t, ty = e['t'], e['type']
         if ty == 'footstep':
             kind = e.get('kind') or 'walk'
-            m.add(t, step(kind), 0.6 if kind == 'run' else 0.45, pan=rng.uniform(-0.15, 0.15), rev=0.18)
+            m.add(t, step(kind), 0.6 if kind == 'run' else 0.42, pan=rng.uniform(-0.15, 0.15), rev=0.18)
+        elif ty == 'farstep':
+            m.add(t, lp(step('run'), 900), 0.55 * e.get('vol', 0.5) * 1.6, pan=0.2, rev=0.7)
         elif ty == 'ding':
-            m.add(t, ding(), 0.32, pan=0.2, rev=0.5)
-            m.add(t + 0.2, door_slide(), 0.35, rev=0.3)
+            m.add(t, ding(), 0.3, pan=0.2, rev=0.5)
+            m.add(t + 0.2, door_slide(), 0.32, rev=0.3)
         elif ty == 'doorSlide':
-            m.add(t, door_slide(), 0.35, rev=0.3)
+            m.add(t, door_slide(), 0.32, rev=0.3)
         elif ty == 'sting':
-            m.add(t, sting(), 0.55, rev=0.4)
-        elif ty == 'laughAt':
-            m.add(t + 0.15, laugh(), 0.3, rev=0.55)
+            m.add(t, sting(), 0.5, rev=0.4)
         elif ty == 'rattle':
             m.add(t, rattle(), 0.6, pan=-0.2, rev=0.35)
         elif ty == 'torchClick':
-            m.add(t, click(), 0.5, rev=0.1)
+            m.add(t, click(), 0.6, rev=0.1)
         elif ty == 'click':
-            # 송신이 가까울 때 게임이 내는 잡음 딱딱거림
-            m.add(t, click(), 0.07, pan=rng.uniform(-0.6, 0.6), rev=0.1)
-        elif ty == 'glitch':
-            m.add(t, glitch(), 0.4, rev=0.1)
+            m.add(t, click(), 0.06, pan=rng.uniform(-0.6, 0.6), rev=0.1)
+        elif ty == 'flicker':
+            m.add(t, buzz(), 0.35, rev=0.2)
+        elif ty == 'lightsOut':
+            m.add(t, buzz(0.35) * np.linspace(1, 0, int(0.35 * SR)), 0.5, rev=0.3)
+        elif ty == 'type':
+            m.add(t, typekey(), 0.16, pan=-0.3, rev=0.15)
         elif ty == 'fall':
             m.add(t, fall(), 0.8, rev=0.25)
+        elif ty == 'glitch':
+            m.add(t, glitch(), 0.35, rev=0.1)
 
-    # 장면별 연출음
-    if 'stalkerOut' in marks:
-        m.add(marks['stalkerOut'] - 0.05, boom(4.5), 0.75, rev=0.5)
-        m.add(marks['stalkerOut'] - 0.02, glitch(0.4), 0.6)
-    el_t = shots['elevator']
-    m.add(el_t, hum(2.6), 0.4, rev=0.2)
-    # 웅크린 장면: 심장 박동이 빨라진다
-    tt, bpm = shots['descend'], 64
-    while tt < ends['descend'] - 0.2:
-        hb = heartbeat(bpm)
-        m.add(tt, hb, 1.1, rev=0.1)
-        tt += 60 / bpm
-        bpm = min(130, bpm + 7)
-    # CCTV: 잡음
-    m.add(shots['cctv'], static(ends['grid'] - shots['cctv']), 0.3, rev=0.05)
-    m.add(shots['cctv'], glitch(0.3), 0.5)
-    m.add(shots['grid'], glitch(0.3), 0.6)
-    m.add(shots['chase'] - 2.6, riser(2.6), 0.45, rev=0.3)
-    # 추격: 타악 (150 → 176bpm 으로 빨라짐)
-    tt = shots['chase']
-    i = 0
-    while tt < ends['chase'] - 0.1:
-        beat = 60 / (150 + 26 * (tt - shots['chase']) / max(0.1, ends['chase'] - shots['chase']))
-        m.add(tt, taiko(), 0.55 if i % 4 == 0 else 0.38, pan=(0.25 if i % 2 else -0.25), rev=0.25)
-        if i % 2 == 1:
-            m.add(tt + beat / 2, taiko(), 0.22, rev=0.2)
-        tt += beat
-        i += 1
-    # 엘리베이터 함정: 탑승 → 운행 소음 → 정적 → 점프스케어
+    # ---- 장면별 ----
+    if 'figSeen' in marks:  # 엘리베이터 안의 그것: 음악이 뚝 끊기고 낮은 타격
+        m.add(marks['figSeen'], boom(4.0, 44), 0.55, rev=0.6)
+        m.add(marks['figSeen'], sting(2.0), 0.25, rev=0.6)
+    if 'descend' in shots:  # 심장 박동이 빨라진다
+        tt, bpm = S('descend') + 0.3, 58
+        while tt < (marks.get('descendHit', E('descend'))) - 0.2:
+            m.add(tt, heartbeat(bpm), 1.0, rev=0.1)
+            tt += 60 / bpm
+            bpm = min(135, bpm + 8)
+    if 'descendHit' in marks:
+        m.add(marks['descendHit'], sting(2.2), 0.7, rev=0.4)
+        m.add(marks['descendHit'], boom(3.0, 46), 0.7, rev=0.4)
+        m.add(marks['descendHit'], glitch(0.4), 0.7)
+    if 'card1' in shots:  # 초침
+        for i in range(3):
+            m.add(S('card1') + 0.05 + i * 0.3, click(), 0.55, rev=0.3)
+    if 'cctv' in shots:
+        m.add(S('cctv'), static(E('grid') - S('cctv')), 0.3, rev=0.05)
+        m.add(S('cctv'), glitch(0.3), 0.5)
+        # 낮은 맥박이 점점 빨라진다
+        tt, bpm = S('cctv'), 90
+        while tt < E('grid'):
+            m.add(tt, heartbeat(bpm), 0.8, rev=0.1)
+            tt += 60 / bpm
+            bpm = min(150, bpm + 6)
+    if 'grid' in shots:
+        m.add(S('grid'), glitch(0.3), 0.6)
+    if 'card2' in shots:  # 숨을 들이켜고 — 정적
+        m.add(S('card2') - 1.6, riser(1.6), 0.3, rev=0.3)
+        m.add(S('card2') + 0.1, bp(noise(0.9), 300, 2500) * env_exp(0.9, 0.4, 0.3), 0.22, rev=0.2)
+        m.add(E('card2') - 2.4, riser(2.4), 0.45, rev=0.3)
+    if 'chase' in shots:  # 혼돈: 가속하는 타악 + 불협 현악 + 서브리미널 타격
+        c0, c1 = S('chase'), E('chase')
+        m.add(c0 - 0.02, boom(3.0, 52), 0.9, rev=0.4)
+        m.add(c0, strings(c1 - c0 + 0.6), 0.32, rev=0.4)
+        tt, i = c0, 0
+        while tt < c1 - 0.05:
+            beat = 60 / (150 + 40 * (tt - c0) / max(0.1, c1 - c0))
+            m.add(tt, taiko(), 0.55 if i % 4 == 0 else 0.38, pan=(0.25 if i % 2 else -0.25), rev=0.25)
+            if i % 2 == 1:
+                m.add(tt + beat / 2, taiko(), 0.24, rev=0.2)
+            tt += beat
+            i += 1
+        for kname in ('sub1', 'sub2', 'sub3'):
+            if kname in marks:
+                m.add(marks[kname] - 0.01, sting(0.9), 0.6, rev=0.2)
+                m.add(marks[kname], glitch(0.2), 0.7)
+    if 'flash' in marks:
+        m.add(marks['flash'] - 0.01, sting(1.4), 0.8, rev=0.3)
+        m.add(marks['flash'] - 0.01, boom(2.0, 40), 0.7, rev=0.3)
+        m.add(marks['flash'], glitch(0.4), 0.9)
     if 'ride' in marks:
         reveal = marks.get('reveal', marks['ride'] + 3)
         m.add(marks['ride'], hum(max(0.5, reveal - marks['ride'])), 0.3, rev=0.15)
     if 'die' in marks:
         m.add(marks['die'] - 0.02, jumpscare(), 0.95, rev=0.35)
-    # 로고
     if 'logo' in marks:
-        m.add(marks['logo'] - 1.6, riser(1.6), 0.3, rev=0.3)
-        m.add(marks['logo'], boom(6.0, 40), 0.9, rev=0.6)
-        m.add(marks['logo'] + 0.1, sting(3.0), 0.25, rev=0.7)
-        for i, f in enumerate([329.6, 311.1, 293.7]):
-            m.add(marks['logo'] + 2.0 + i * 1.1, musicbox(f), 0.14, rev=0.8)
-    if 'cta' in marks:
-        m.add(marks['cta'], bell(220, 4.0), 0.25, rev=0.7)
+        m.add(marks['logo'], boom(6.0, 40), 0.85, rev=0.6)
+        m.add(marks['logo'] + 0.1, sting(3.0), 0.2, rev=0.7)
+        for i, f in enumerate([523.3, 493.9, 466.2]):  # 자장가 첫 음이 늘어지며 반음씩 내려앉는다
+            m.add(marks['logo'] + 1.2 + i * 1.3, musicbox(f), 0.12, rev=0.85)
+
+    # ---- 안내 방송 (TTS): 깨끗한 방송 → 일그러짐 → 마지막엔 귀 바로 옆에서 ----
+    vplan = [('v1', S('climb', -1) + 0.25, 'pa'), ('v2', marks.get('figOpen', -99) - 99 if False else marks.get('emptyOpen', -1) + 0.3, 'pa'),
+             ('v3', S('glimpse', -1) + 0.15, 'warp'), ('v4', S('descend', -1) + 0.2, 'crush'),
+             ('v5', S('card2', -1) + 0.15, 'deep'), ('v6', S('trap', -1) + 0.3, 'stutter'), ('v7', marks.get('cta', -1), 'close')]
+    for vid, t, style in vplan:
+        if t < 0:
+            continue
+        v = voice(vid, style)
+        if v is not None:
+            m.add(t, v, 0.9 if style != 'close' else 0.75, rev={'pa': 0.45, 'warp': 0.5, 'crush': 0.35, 'deep': 0.55, 'stutter': 0.3, 'close': 0.08}[style])
+
+    # 카드3: 완전한 정적 (모든 소리를 거의 0으로)
+    duck = np.ones(m.n)
+    if 'card3' in shots:
+        a, b = int((S('card3') + 0.12) * SR), int(E('card3') * SR)
+        f = int(0.08 * SR)
+        duck[a:b] = 0.02
+        duck[a - f:a] = np.linspace(1, 0.02, f)
+        duck[b:b + f] = np.linspace(0.02, 1, f)
+    m.duck = duck
 
     out = m.render()
     # 마지막 페이드

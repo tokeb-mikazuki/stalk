@@ -21,6 +21,12 @@
   g.progress.addDeath = () => {};
   const origDie = g.die.bind(g);
   const origStalkerUpdate = s.update;
+  const origUpdateMesh = s.updateMesh;
+  const origUpdateTitle = g.updateTitle;
+  const origUpdateCar = g.updateCar;
+  // 송신은 거의 보여 주지 않는다: 기본은 앞뒤 모두 검은 실루엣. 얼굴은 마지막 한 순간에만
+  const frontMesh = s.body.children[0];
+  const silhouette = (on) => { frontMesh.material = on ? s.backMat : s.faceMat; };
   const origDetect = s.detect;
 
   // window.TR_FROM: 이 번호의 샷부터 촬영 (미리보기용)
@@ -45,29 +51,32 @@
   #tr { position: fixed; inset: 0; z-index: 9999; pointer-events: none; font-family: 'Noto Serif KR', serif; }
   #tr .bar { position: absolute; left: 0; right: 0; height: 10.5%; background: #000; }
   #tr .bar.top { top: 0; } #tr .bar.bot { bottom: 0; }
-  #tr .cap { position: absolute; left: 0; right: 0; bottom: 15%; text-align: center; color: #e9e4dc; font-size: 30px; font-weight: 500;
-    letter-spacing: .14em; text-shadow: 0 0 18px rgba(0,0,0,.95), 0 0 4px #000; opacity: 0; }
-  #tr .cap.big { font-size: 46px; font-weight: 700; color: #f2ece4; letter-spacing: .22em; bottom: 44%; }
+  /* 수칙 문구: 낡은 안내문을 타자로 치듯 한 글자씩 */
+  #tr .rule { position: absolute; left: 7.5%; bottom: 15.5%; color: #e4ded2; opacity: 0; text-shadow: 0 0 14px rgba(0,0,0,.95), 0 0 3px #000; }
+  #tr .rule .hd { font-family: 'Noto Sans KR', sans-serif; font-size: 13px; font-weight: 400; letter-spacing: .55em; color: #8f897e; margin-bottom: 12px; }
+  #tr .rule .hd::before { content: ''; display: inline-block; width: 26px; height: 1px; background: #8f897e; vertical-align: middle; margin-right: 12px; }
+  #tr .rule .tx { font-size: 27px; font-weight: 500; letter-spacing: .08em; }
+  #tr .rule .tx .n { color: #b3261e; margin-right: .5em; font-weight: 700; }
+  #tr .rule .tx .cur { display: inline-block; width: .5em; border-bottom: 2px solid #e4ded2; margin-left: 2px; }
+  #tr .rule.center { left: 0; right: 0; bottom: auto; top: 50%; transform: translateY(-50%); text-align: center; }
+  #tr .rule.center .tx { font-size: 34px; }
   #tr.nobars .bar { display: none; }
   #tr .black { position: absolute; inset: 0; background: #000; opacity: 0; }
   #tr .logo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
   #tr .logo h1 { margin: 0; font-size: 92px; font-weight: 900; color: #efe8de; letter-spacing: .12em; text-shadow: 0 0 30px rgba(180,0,0,.55), 3px 0 0 rgba(255,0,0,.35), -3px 0 0 rgba(0,180,255,.25); }
   #tr .logo h2 { margin: 18px 0 0; font-family: 'Noto Sans KR', sans-serif; font-weight: 300; font-size: 22px; letter-spacing: .9em; color: #b9b2a8; padding-left: .9em; }
-  #tr .logo .tag { margin-top: 46px; font-size: 22px; letter-spacing: .3em; color: #cfc8be; opacity: 0; }
-  #tr .logo .cta { margin-top: 22px; font-family: 'Noto Sans KR', sans-serif; font-size: 16px; letter-spacing: .5em; color: #ff4a4a; opacity: 0; padding-left: .5em; }
-  #tr .logo .modes { margin-top: 16px; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; letter-spacing: .4em; color: #8d877f; opacity: 0; padding-left: .4em; }
+  #tr .logo .tag { margin-top: 54px; font-size: 21px; letter-spacing: .24em; color: #cfc8be; opacity: 0; }
+  #tr .logo .tag .n { color: #b3261e; font-weight: 700; margin-right: .5em; }
   `;
   document.head.appendChild(css);
   const root = document.createElement('div');
   root.id = 'tr';
-  root.innerHTML = `<div class="black"></div><div class="cap"></div><div class="bar top"></div><div class="bar bot"></div>
+  root.innerHTML = `<div class="black"></div><div class="rule"><div class="hd"></div><div class="tx"></div></div><div class="bar top"></div><div class="bar bot"></div>
     <div class="logo"><h1>공포의 송신계단</h1><h2>SONGSHIN STAIRWELL</h2>
-    <div class="tag">끝까지 올라가라. 들키지 말고.</div>
-    <div class="modes">캐주얼 · 노말 · 하드 · 악몽</div>
-    <div class="cta">지금 플레이</div></div>`;
+    <div class="tag"><span class="n">13.</span>끝까지 오르십시오.</div></div>`;
   document.body.appendChild(root);
   const $ = (q) => root.querySelector(q);
-  const capEl = $('.cap'), blackEl = $('.black'), logoEl = $('.logo');
+  const ruleEl = $('.rule'), ruleHd = $('.rule .hd'), ruleTx = $('.rule .tx'), blackEl = $('.black'), logoEl = $('.logo');
   // 게임 HUD·메뉴 숨김
   const hideCss = document.createElement('style');
   hideCss.textContent = '#hud, #prompt, #msg, #warn, #toast, #clickhint, #touch, .screen, #note, #cross, .grain, #ver, .version { display: none !important; } #cctv .hint { display: none !important; }';
@@ -75,19 +84,38 @@
   document.body.classList.remove('menu-on');
 
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
-  /** 자막 [t0, t1] 동안 페이드 인/아웃 */
-  function caption(lt, list) {
-    let text = '', op = 0, big = false;
-    for (const c of list) {
-      if (lt >= c.t0 - 0.01 && lt <= c.t1) {
-        text = c.text;
-        big = !!c.big;
-        op = Math.min(clamp01((lt - c.t0) / 0.45), clamp01((c.t1 - lt) / 0.45));
-      }
+  const HEADER = '송신아파트 비상계단 이용 수칙';
+  const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  /**
+   * 수칙 문구 — [t0, t1] 동안 한 글자씩 타이핑되고, 끝에서 흐려진다.
+   * { t0, t1, n: 번호, text, header: 머리말 표시, center: 화면 가운데 }
+   */
+  function rule(lt, list) {
+    let r = null;
+    for (const c of list) if (lt >= c.t0 - 0.01 && lt <= c.t1) r = c;
+    if (!r) {
+      ruleEl.style.opacity = 0;
+      ruleEl.dataset.k = '';
+      return;
     }
-    if (capEl.textContent !== text) capEl.textContent = text;
-    capEl.classList.toggle('big', big);
-    capEl.style.opacity = op.toFixed(3);
+    const chars = [...r.text];
+    const shown = Math.min(chars.length, Math.max(0, Math.floor((lt - r.t0) / 0.055)));
+    const key = `${r.n}:${shown}`;
+    if (ruleEl.dataset.k !== key) {
+      if (shown > (+ruleEl.dataset.shown || 0) && ruleEl.dataset.n === String(r.n)) ev('type');
+      ruleEl.dataset.k = key;
+      ruleEl.dataset.n = String(r.n);
+      ruleEl.dataset.shown = String(shown);
+      ruleHd.textContent = r.header ? HEADER : '';
+      ruleHd.style.display = r.header ? '' : 'none';
+      const blink = shown < chars.length || Math.floor(lt * 2.2) % 2 === 0;
+      ruleTx.innerHTML = `<span class="n">${r.n}.</span>${esc(chars.slice(0, shown).join(''))}${blink ? '<span class="cur"></span>' : ''}`;
+    }
+    ruleEl.classList.toggle('center', !!r.center);
+    // 끝날 때는 깜빡이며 사라진다
+    const out = clamp01((r.t1 - lt) / 0.35);
+    const flick = out < 1 && Math.random() < 0.35 ? 0.15 : 1;
+    ruleEl.style.opacity = (Math.min(clamp01((lt - r.t0 + 0.05) / 0.15), out) * flick).toFixed(3);
   }
   const black = (v) => { blackEl.style.opacity = clamp01(v).toFixed(3); };
 
@@ -100,6 +128,11 @@
     p.reset(FLOOR_PHI * 2 + 0.6);
     p.frozen = false;
     s.update = function (dt) { this.visible = false; this.updateMesh(dt); };
+    s.updateMesh = origUpdateMesh;
+    g.updateTitle = origUpdateTitle;
+    g.updateCar = origUpdateCar;
+    silhouette(true);
+    g.director.lightMul = 1;
     s.detect = () => false;
     s.reset(g.diff);
     s.visible = false;
@@ -116,7 +149,7 @@
     g.stalkerOnStairs = undefined;
     g.resetDoors();
     if (g.titleLight) g.titleLight.intensity = 0;
-    capEl.style.opacity = 0;
+    ruleEl.style.opacity = 0;
     logoEl.style.opacity = 0;
   }
   function place(phi, r, yaw, pitch = 0) {
@@ -143,12 +176,12 @@
   const firstOpenRoom = (min) => g.world.fireDoors.find((d) => !d.locked && d.k >= min) || g.world.fireDoors.find((d) => !d.locked);
 
   /** 검은 화면 자막 카드 (막과 막 사이) */
-  const card = (name, dur, text) => ({
+  const card = (name, dur, r = null) => ({
     name, dur,
     setup() { mark(name); },
     tick(lt) {
       black(1);
-      caption(lt, [{ t0: 0.15, t1: dur - 0.05, text, big: true }]);
+      rule(lt, r ? [{ t0: 0.2, t1: dur - 0.05, center: true, ...r }] : []);
     },
   });
   /** 송신 얼굴이 화면을 덮치는 짧은 섬광 컷 */
@@ -169,39 +202,29 @@
   }
 
   // ---------------------------------------------------------------- 샷 목록
-  // 기(도입·세계) → 승(송신 등장) → 전(숨기·감시) → 결/클라이맥스(추격·엘리베이터) → 로고
+  // 음악과 함께 점점 고조된다:
+  //   평온(아무 일도 없는 계단·빈 엘리베이터) → 이상 징후(같은 구도에 서 있는 그것, 깜빡이는 불)
+  //   → 등장·긴장(엘리베이터, 웅크림, CCTV) → 혼돈(서브리미널 컷이 섞인 추격, 엘리베이터 함정) → 로고
   const shots = [
-    // 0. 콜드 오프닝: 정적 속에서 한 순간 그것의 얼굴
-    {
-      name: 'coldopen', dur: 1.7,
-      setup() { faceFlash(9); },
-      tick(lt) {
-        const on = lt > 0.55 && lt < 0.82;
-        black(on ? 0 : 1);
-        if (on) {
-          mark('coldflash');
-          g.glitchPulse(0.9);
-          p.shake = 1;
-        }
-      },
-    },
     // 1. 올려다본 나선 계단 — 멀리서 무언가 내려온다
     {
-      name: 'title', dur: 5.0,
+      name: 'title', dur: 4.6,
       setup() {
         resetAll();
         g.state = 'title';
         g.titleT = 0.4;
         u.uFade.value = 1;
+        // 평온한 도입: 아직 아무도 없다
+        s.updateMesh = function (dt) { this.visible = false; origUpdateMesh.call(this, dt); };
       },
       tick(lt) {
         u.uFade.value = Math.max(0, 1 - lt / 2.2) + DT * 0.5;
-        caption(lt, [{ t0: 1.0, t1: 4.6, text: '자정이 지난 아파트, 비상계단.' }]);
+        rule(lt, []);
       },
     },
     // 2. 손전등을 들고 계단을 오른다
     {
-      name: 'climb', dur: 4.6,
+      name: 'climb', dur: 4.4,
       setup() {
         resetAll();
         place(FLOOR_PHI * 2 + 1.9, R_MID - 0.25, uphillYaw(FLOOR_PHI * 2 + 1.9) - 0.55, 0.1);
@@ -214,12 +237,12 @@
         if (p.r > R_MID + 0.2) p.r -= 0.02;
         p.yaw = uphillYaw(p.phi) - 0.55 + 0.1 * Math.sin(lt * 0.7); // 오른쪽(나선 안쪽)으로 — 난간과 위로 감기는 계단
         p.pitch = 0.2 + 0.06 * Math.sin(lt * 0.5);
-        caption(lt, [{ t0: 0.4, t1: 4.3, text: '출구는 단 하나. 꼭대기의 옥상 문.' }]);
+        rule(lt, [{ t0: 0.5, t1: 4.4, n: 1, header: true, text: '계단은 위로만 오르십시오.' }]);
       },
     },
     // 3. 난간 너머 위를 올려다본다 — 끝없는 나선
     {
-      name: 'well', dur: 3.6,
+      name: 'well', dur: 3.3,
       setup() {
         resetAll();
         const phi = FLOOR_PHI * 1 + 0.55;
@@ -230,112 +253,167 @@
         const phi = p.phi;
         p.yaw = Math.atan2(Math.cos(phi), Math.sin(phi)) - 0.15 + lt * 0.05;
         p.pitch = Math.min(1.4, 0.95 + lt * 0.09);
-        caption(lt, [{ t0: 0.5, t1: 3.5, text: '그리고 이 계단에는—' }]);
       },
     },
-    // 4. 엘리베이터가 내려와 열린다. 밝은 칸 안에 그것이 서 있다
+    // 평온: 엘리베이터가 와서 열린다. 밝고, 비어 있다
     {
-      name: 'elevator', dur: 5.6,
+      name: 'elevEmpty', dur: 4.2,
       setup() {
         resetAll();
-        this.walk = false;
-        const k = 5;
-        const phi = FLOOR_PHI * k + DOOR_ANGLE - 0.06;
-        place(phi, R_IN + 0.55, 0, -0.14);
+        const k = 3;
+        const phi = FLOOR_PHI * k + DOOR_ANGLE - 0.1;
+        place(phi, R_IN + 0.7, 0, -0.08);
         const d = g.world.elevators[k].doorPos;
-        p.yaw = faceYaw(p.x, p.z, d.x, d.z) - 0.12;
+        p.yaw = faceYaw(p.x, p.z, d.x, d.z) + 0.1;
         p.torchOn = false;
-        // 약 2.3초 뒤 도착하도록 출발 위치를 정한다 (송신 AI가 속도 배율을 매 프레임 1로 되돌리므로)
         el.reset(k);
-        el.floor = k + 2.3 / g.diff.elevatorSecPerFloor;
-        el.occupant = 'stalker';
-        s.reset(g.diff);
-        s.update = origStalkerUpdate;
-        s.detect = () => false;
-        s.state = 'elevator';
-        s.elevFloor = el.floor;
-        s.elevTarget = k;
-        s.elevDelay = 0;
-        s.rideSent = true;
-        s.hunting = false;
-        el.send(k);
+        el.floor = k + 1.4 / g.diff.elevatorSecPerFloor;
+        el.call(k, 'player');
         g.world.elevators[k].setCall(true);
-        this.k = k;
       },
       tick(lt) {
         black(1 - lt / 0.25);
-        // 내린 뒤에는 플레이어 쪽으로 걸어온다
-        s.belief.phi = p.phi;
-        s.belief.t = 0;
-        s.belief.vel = 0;
-        if (s.state === 'arriving' && s.stateTime > 1.05) mark('stalkerOut');
-        if (TR.marks.stalkerOut !== undefined && TR.t - TR.marks.stalkerOut < DT * 1.5) g.glitchPulse(0.7);
-        // 내린 뒤 한 박자 쉬고, 플레이어 쪽으로 천천히 걸어온다
-        if (TR.marks.stalkerOut !== undefined && TR.t - TR.marks.stalkerOut > 0.7 && !this.walk) {
-          this.walk = true;
-          scriptStalker((dt) => {
-            if (s.distTo(p) > 1.7) s.moveToward(p.phi, p.r, 1.25, dt);
-            const w = s.worldXZ();
-            s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
-            s.visible = true;
-          });
-        }
-        const o = TR.marks.stalkerOut !== undefined ? TR.marks.stalkerOut - this.t0 : 99;
-        caption(lt, [{ t0: o + 0.15, t1: 5.6, text: '송신이 산다.', big: true }]);
+        if (el.doorK === 3) mark('emptyOpen');
       },
     },
-    // 5. 숨죽인 채 웅크린다. 위에서 내려오는 발소리 — 그리고 손전등을 켜 버렸다
+    // 이상 징후: 처음과 같은 구도 — 이번엔 계단 위에 누가 서 있다. 불이 떨린다
     {
-      name: 'descend', dur: 5.2,
+      name: 'glimpse', dur: 3.3,
+      setup() {
+        resetAll();
+        g.state = 'title';
+        g.titleT = 2.6;
+        u.uFade.value = 0;
+        g.updateTitle = (dt) => {
+          origUpdateTitle.call(g, dt);
+          const lt = TR.lt;
+          const off = (lt > 1.1 && lt < 1.25) || (lt > 1.4 && lt < 1.48) || (lt > 2.6 && lt < 2.95);
+          g.titleLight.intensity *= off ? 0.05 : 1;
+          // 처음엔 없다 → 불이 한 번 떨린 뒤 저 위에 서 있다 → 다시 떨리면 사라진다
+          if (lt < 1.25 || lt > 2.6) s.group.visible = false;
+        };
+        mark('glimpse');
+      },
+      tick(lt) {
+        black(1 - lt / 0.2);
+        if (lt > 1.1 && lt < 1.14) ev('flicker');
+        if (lt > 2.6 && lt < 2.64) ev('flicker');
+        if (lt > 3.0) black((lt - 3.0) / 0.3);
+      },
+    },
+    // 4. 엘리베이터가 다시 열린다. 불이 떨리는 순간에만 — 안쪽 벽을 보고 선 무언가
+    {
+      name: 'elevator', dur: 4.8,
+      setup() {
+        resetAll();
+        const k = 5;
+        const phi = FLOOR_PHI * k + DOOR_ANGLE - 0.06;
+        place(phi, R_IN + 0.6, 0, -0.1);
+        const d = g.world.elevators[k].doorPos;
+        p.yaw = faceYaw(p.x, p.z, d.x, d.z) - 0.05;
+        p.torchOn = false;
+        el.reset(k);
+        el.floor = k + 1.1 / g.diff.elevatorSecPerFloor;
+        el.call(k, 'player');
+        g.world.elevators[k].setCall(true);
+        this.k = k;
+        this.open = null;
+        this.flick = 1;
+        this.fig = false;
+        this.close = 0;
+        const car = g.world.car;
+        g.updateCar = (dt) => {
+          origUpdateCar.call(g, dt);
+          car.light.intensity *= this.flick;
+          car.lightMat.color.multiplyScalar(Math.max(0.02, this.flick));
+        };
+        scriptStalker(() => {
+          s.phi = FLOOR_PHI * k + DOOR_ANGLE;
+          s.r = R_OUT + 1.0 - this.close;
+          const w = s.worldXZ();
+          s.yaw = meshYawTo(w.x, w.z, w.x * 2, w.z * 2); // 안쪽 벽을 보고 서 있다
+          s.visible = this.fig;
+        });
+      },
+      tick(lt) {
+        black(1 - lt / 0.25);
+        if (el.doorK === this.k && this.open === null) {
+          this.open = lt;
+          mark('figOpen');
+        }
+        const o = this.open === null ? -1 : lt - this.open;
+        const W = (a, b) => o >= a && o < b;
+        // 열리고 한동안은 밝고 비어 있다 → 불이 떨릴 때만 그것이 보인다 → 마지막엔 불이 죽는다
+        let f = 1, fig = false;
+        if (W(1.2, 1.28) || W(1.4, 1.46) || W(2.0, 2.14) || W(2.3, 2.36)) f = 0;
+        if (W(1.28, 1.4)) { f = 1.3; fig = true; this.close = 0; }
+        if (W(2.14, 2.3)) { f = 1.3; fig = true; this.close = 0.55; }
+        if (W(2.36, 2.46)) { f = 1.5; fig = true; this.close = 1.05; }
+        if (o >= 2.46) f = 0;
+        if (fig && !this.fig) { ev('flicker'); mark('figSeen'); g.glitchPulse(0.35); }
+        if (o >= 2.46 && this.flick > 0) ev('lightsOut');
+        this.flick = f;
+        this.fig = fig;
+        if (o > 3.2) black((o - 3.2) / 0.2);
+      },
+    },
+    // 5. 숨죽인 채 웅크린다. 위에서 발소리가 내려온다 — 그리고 손전등을 켜 버렸다.
+    //    불이 깜빡일 때마다 그것은 한 계단씩 가까이 있다 (얼굴은 보이지 않는다)
+    {
+      name: 'descend', dur: 6.0,
       setup() {
         resetAll();
         const phi = FLOOR_PHI * 3 + 0.7;
         place(phi, R_MID - 0.2, uphillYaw(phi) - 0.5, 0.18);
         p.torchOn = false;
         g.input.crouch = true;
-        this.d = 6.4;
-        s.state = 'approach';
-        s.visible = true;
-        scriptStalker((dt) => {
-          const lt = TR.lt;
-          if (lt < 3.7) this.d = Math.max(3.6, this.d - 0.8 * dt);
-          else if (lt > 4.1) this.d = Math.max(0.9, this.d - 5.5 * dt);
-          s.phi = p.phi + this.d / R_MID;
-          s.r = R_MID + 0.15;
+        this.stage = 0;
+        this.hit = false;
+        const dists = [5.0, 3.3, 2.0, 1.05];
+        scriptStalker(() => {
+          s.phi = p.phi + dists[this.stage] / R_MID;
+          s.r = R_MID + 0.1;
           const w = s.worldXZ();
-          if (lt < 3.6) s.yaw = Math.atan2(Math.sin(s.phi), -Math.cos(s.phi));
-          else s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
-          s.visible = true;
+          s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
+          s.visible = p.torchOn && TR.lt > 4.2;
         });
       },
       tick(lt) {
         black(1 - lt / 0.25);
-        const w = s.worldXZ();
-        const toS = faceYaw(p.x, p.z, w.x, w.z);
-        p.yaw = toS + 0.12 + Math.sin(lt * 0.4) * 0.03; // 내려오는 송신 쪽 (살짝 비켜서)
-        p.pitch = Math.atan2(s.footY + 1.0 - (p.footY + 1.3), Math.hypot(w.x - p.x, w.z - p.z)) * 0.8;
-        if (lt >= 2.75 && !p.torchOn) {
-          p.torchOn = true;
+        // 계단 위 — 그것이 나타날 자리를 바라본다
+        const tphi = p.phi + 4.0 / R_MID;
+        const tx = (R_MID + 0.1) * Math.cos(tphi), tz = (R_MID + 0.1) * Math.sin(tphi);
+        p.yaw = faceYaw(p.x, p.z, tx, tz) + 0.1 + Math.sin(lt * 0.4) * 0.02;
+        p.pitch = 0.32;
+        // 위에서 내려오는 발소리 (점점 크게)
+        for (const [t, v] of [[0.7, 0.25], [1.55, 0.35], [2.35, 0.45], [3.05, 0.6], [3.65, 0.75]]) {
+          if (lt >= t && lt - DT < t) ev('farstep', { vol: v });
+        }
+        const W = (a, b) => lt >= a && lt < b;
+        if (lt >= 4.2 && !this.lit) {
+          this.lit = true;
           g.audio.torchClick();
         }
-        if (lt >= 3.6 && s.state !== 'chase') {
-          s.state = 'chase';
-          g.glitchPulse(0.6);
-          g.audio.sting(0.45);
-          g.audio.laughAt(s.pos, 1);
-          p.shake = 0.6;
+        let on = lt >= 4.2;
+        if (W(4.65, 4.76)) { on = false; this.stage = 1; }
+        if (W(5.05, 5.13)) { on = false; this.stage = 2; }
+        if (W(5.38, 5.44)) { on = false; this.stage = 3; }
+        if (lt >= 5.6) on = false;
+        if (on !== p.torchOn && lt > 4.3) ev('flicker');
+        p.torchOn = on;
+        if (lt >= 5.6 && !this.hit) {
+          this.hit = true;
+          mark('descendHit');
+          g.glitchPulse(0.8);
         }
-        caption(lt, [
-          { t0: 0.3, t1: 2.5, text: '소리를 내지 마라.' },
-          { t0: 2.75, t1: 4.0, text: '불을 켜지 마라.' },
-        ]);
-        if (lt > 5.0) black((lt - 5.0) / 0.2);
+        if (lt >= 5.6) black(1);
+        rule(lt, [{ t0: 0.3, t1: 4.0, n: 4, text: '그것과 눈이 마주치면, 불을 켜지 마십시오.' }]);
       },
     },
-    card('card1', 1.9, '숨을 곳은, 절반뿐.'),
+    card('card1', 0.8),
     // 6. 비상실에 숨어 CCTV로 문 앞을 본다. 그것이 쓱 다가온다
     {
-      name: 'cctv', dur: 4.4,
+      name: 'cctv', dur: 4.0,
       setup() {
         resetAll();
         const d = firstOpenRoom(4);
@@ -360,32 +438,30 @@
       },
       tick(lt) {
         black(1 - lt / 0.2);
-        if (lt > 3.4 && !this.rattled) {
+        if (lt > 3.0 && !this.rattled) {
           this.rattled = true;
           g.onDoorRattle(this.door.k);
           g.glitchPulse(0.4);
         }
-        caption(lt, [{ t0: 0.4, t1: 4.4, text: '숨어도, 오래 버틸 수는 없다.' }]);
       },
     },
     // 7. 전 층 CCTV — MOTION
     {
-      name: 'grid', dur: 2.6,
+      name: 'grid', dur: 2.2,
       setup() {
         const d = shots.find((x) => x.name === 'cctv').door;
         g.cctvToggle();
         this.door = d;
       },
       tick(lt) {
-        if (lt > 1.6 && !this.r2) {
+        if (lt > 1.2 && !this.r2) {
           this.r2 = true;
           g.onDoorRattle(this.door.k);
         }
-        caption(lt, [{ t0: 0.25, t1: 2.45, text: '그것도, 당신을 찾고 있다.' }]);
-        if (lt > 2.45) black((lt - 2.45) / 0.15);
+        if (lt > 2.05) black((lt - 2.05) / 0.15);
       },
     },
-    card('card2', 1.3, '도망쳐.'),
+    card('card2', 2.9, { n: 9, text: '뒤돌아보지 마십시오.' }),
     // 8. 추격 — 달리고, 돌아보고, 넘어진다
     {
       name: 'chase', dur: 6.6,
@@ -400,14 +476,23 @@
         this.gap = 6.2;
         s.state = 'chase';
         s.visible = true;
+        this.sub = false;
         scriptStalker((dt) => {
           const lt = TR.lt;
           const close = lt < 2.2 ? 0.25 : lt < 3.7 ? 1.4 : lt < 5.4 ? 0.2 : 2.4;
           this.gap = Math.max(1.3, this.gap - close * dt);
-          s.phi = p.phi - this.gap / R_MID;
-          s.r = R_MID + 0.1 * Math.sin(lt * 3);
-          const w = s.worldXZ();
-          s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
+          if (this.sub) {
+            // 서브리미널: 달리는 눈앞에 몇 프레임 동안 얼굴이 박힌다
+            const w = { x: p.x - Math.sin(p.yaw) * 1.15, z: p.z - Math.cos(p.yaw) * 1.15 };
+            s.phi = p.phi + Math.atan2(w.z, w.x) - Math.atan2(p.z, p.x);
+            s.r = Math.hypot(w.x, w.z);
+            s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
+          } else {
+            s.phi = p.phi - this.gap / R_MID;
+            s.r = R_MID + 0.1 * Math.sin(lt * 3);
+            const w = s.worldXZ();
+            s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
+          }
           s.visible = true;
         });
         g.audio.sting(0.5);
@@ -429,6 +514,16 @@
         g.input.b = look >= 0.5;
         g.input.sprint = look < 0.5;
         if (lt > 2.4 && lt < 2.5) g.glitchPulse(0.5);
+        // 정신없는 편집: 짧은 암전 끊김 + 서브리미널 얼굴
+        const inW = (a, b) => lt >= a && lt < b;
+        const stutter = inW(0.8, 0.87) || inW(1.9, 1.94) || inW(4.55, 4.62) || inW(5.9, 5.97);
+        this.sub = inW(1.2, 1.3) || inW(4.1, 4.2) || inW(6.0, 6.1);
+        if (this.sub) {
+          g.glitchPulse(1);
+          mark(lt < 2 ? 'sub1' : lt < 5 ? 'sub2' : 'sub3');
+        }
+        if (stutter) black(1);
+        else if (lt > 0.15) black(0);
         if (Math.floor(lt * 2.6) !== Math.floor((lt - DT) * 2.6)) g.glitchPulse(0.25); // 박자에 맞춘 잔떨림
         if (lt > 5.3 && !this.tripped) {
           this.tripped = true;
@@ -445,7 +540,7 @@
       setup() { faceFlash(11); mark('flash'); },
       tick() { g.glitchPulse(1); p.shake = 1; },
     },
-    card('card3', 1.0, ''),
+    card('card3', 0.8),
     // 9. 엘리베이터에 탔다 — 문이 열리면
     {
       name: 'trap', dur: 9,
@@ -465,7 +560,7 @@
         p.torchOn = false;
         el.doorT = 1.3;
         s.update = origStalkerUpdate;
-        g.die = () => { mark('die'); origDie(); };
+        g.die = () => { mark('die'); silhouette(false); origDie(); }; // 단 한 번, 얼굴
         this.patched = false;
       },
       tick(lt) {
@@ -479,7 +574,7 @@
           mark('ride');
         }
         if (g.trap && el.doorK === 2) mark('reveal');
-        caption(lt, [{ t0: 0.4, t1: 3.4, text: '엘리베이터는… 타지 마라.' }]);
+        rule(lt, [{ t0: 0.4, t1: 3.5, n: 12, text: '엘리베이터 문이 열리면, 눈을 감으십시오.' }]);
         if (g.state === 'dying' && g.dieT > 1.45) this.end = true;
         if (g.state === 'dying' && g.dieT > 1.25) black((g.dieT - 1.25) / 0.2);
       },
@@ -487,7 +582,7 @@
     },
     // 10. 로고
     {
-      name: 'logo', dur: 7.8,
+      name: 'logo', dur: 7.2,
       setup() {
         resetAll();
         g.hud.screen(null);
@@ -495,6 +590,7 @@
         g.titleT = 5;
         u.uFade.value = 1;
         black(1);
+        s.updateMesh = function (dt) { this.visible = false; origUpdateMesh.call(this, dt); };
       },
       tick(lt) {
         black(Math.max(0, 1 - lt / 0.6));
@@ -504,10 +600,8 @@
         logoEl.style.transform = `scale(${(1.04 - 0.04 * a).toFixed(4)})`;
         if (lt > 0.5) mark('logo');
         if (lt > 0.5 && lt < 0.62) g.glitchPulse(0.9);
-        $('.tag').style.opacity = clamp01((lt - 2.3) / 0.8).toFixed(3);
-        $('.modes').style.opacity = clamp01((lt - 3.6) / 0.8).toFixed(3);
-        $('.cta').style.opacity = (clamp01((lt - 4.6) / 0.6) * (0.75 + 0.25 * Math.sin(lt * 5))).toFixed(3);
-        if (lt > 4.6) mark('cta');
+        $('.tag').style.opacity = clamp01((lt - 2.6) / 1.0).toFixed(3);
+        if (lt > 2.6) mark('cta');
         if (lt > 7.0) black((lt - 7.0) / 0.8);
       },
     },
