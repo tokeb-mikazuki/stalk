@@ -40,6 +40,7 @@ uniform float uTime;
 uniform float uSize;
 uniform float uScale;
 uniform float uMaxSize;
+uniform float uDensity;
 attribute float aSeed;
 varying float vBright;
 void main() {
@@ -50,6 +51,8 @@ void main() {
   float dist = length(d);
   float c = dot(d / max(dist, 1e-3), uTorchDir);
   vBright = smoothstep(0.86, 0.95, c) * smoothstep(7.0, 1.0, dist) * smoothstep(0.15, 0.6, dist);
+  // 높은 층일수록 먼지가 많다: 밀도보다 큰 시드의 입자는 숨김
+  vBright *= step(aSeed, uDensity);
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   // 아주 작은 점 (거리와 무관하게 1~2px 정도)
   gl_PointSize = clamp(uScale * (0.6 + aSeed) / -mv.z, 1.0, uMaxSize);
@@ -96,7 +99,7 @@ export class TorchFX {
     camera.add(this.beam);
 
     // 먼지 입자
-    const N = 900;
+    const N = 2400;
     const pos = new Float32Array(N * 3);
     const seed = new Float32Array(N);
     for (let i = 0; i < N; i++) {
@@ -118,6 +121,7 @@ export class TorchFX {
         uScale: { value: 6 },
         uMaxSize: { value: 2 },
         uIntensity: { value: 0 },
+        uDensity: { value: 0.2 },
       },
       vertexShader: dustVert,
       fragmentShader: dustFrag,
@@ -140,6 +144,13 @@ export class TorchFX {
     this.dustOn = dust;
     this.beam.visible = beam;
     this.dust.visible = dust;
+  }
+
+  /** 높이 비율(0=1층, 1=꼭대기)에 따라 먼지 양 조절 */
+  setHeight(ratio) {
+    const target = 0.12 + 0.88 * Math.max(0, Math.min(1, ratio));
+    const u = this.dustMat.uniforms.uDensity;
+    u.value += (target - u.value) * 0.02;
   }
 
   update(dt, active, pixelRatio) {

@@ -216,11 +216,17 @@ export class Stalker {
   }
 
   // ------------------------------------------------------------------ 판단
+  heightRatio(player) {
+    return Math.max(0, Math.min(1, player.floor / Math.max(1, FLOORS - 1)));
+  }
+
   pickElevatorTarget(playerFloor) {
     const cur = Math.round(this.elevFloor);
     let t = cur;
     for (let i = 0; i < 12 && t === cur; i++) {
-      if (Math.random() < this.diff.elevatorWeight) {
+      // 높은 층일수록 플레이어 쪽으로 올 확률이 조금 더 높다
+      const weight = Math.min(0.98, this.diff.elevatorWeight + 0.08 * (playerFloor / Math.max(1, FLOORS - 1)));
+      if (Math.random() < weight) {
         // 플레이어가 있는 곳으로 — 주로 바로 위층에 내려 계단을 따라 내려온다
         const offs = [1, 1, 1, 2, 2, 3, -1, -1, -2, 0];
         t = playerFloor + offs[Math.floor(Math.random() * offs.length)];
@@ -311,8 +317,10 @@ export class Stalker {
       return this.distTo(player) < 6;
     }
     const d = this.distTo(player);
-    const sight = this.diff.sight + (player.torchOn ? 4 : 0) - (player.crouching ? 3 : 0);
-    return d < Math.max(player.noise, sight);
+    // 위로 올라갈수록 아주 조금씩 더 예민해진다 (꼭대기에서 약 +30%)
+    const sharp = 1 + 0.3 * this.heightRatio(player);
+    const sight = (this.diff.sight + (player.torchOn ? 4 : 0) - (player.crouching ? 3 : 0)) * sharp;
+    return d < Math.max(player.noise * sharp, sight);
   }
 
   goElevator(game) {

@@ -28,6 +28,19 @@ export class AudioEngine {
     this.reverbIn.gain.value = 0.55;
     this.reverbIn.connect(this.reverb).connect(this.master);
 
+    // 높은 계단실의 슬랩백 메아리 (위아래 층에서 되돌아오는 발소리)
+    this.slapIn = ctx.createGain();
+    const slap = ctx.createDelay(1);
+    slap.delayTime.value = 0.23;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.32;
+    const slapLp = ctx.createBiquadFilter();
+    slapLp.type = 'lowpass';
+    slapLp.frequency.value = 1800;
+    this.slapIn.connect(slap);
+    slap.connect(slapLp).connect(fb).connect(slap);
+    slapLp.connect(this.master);
+
     this.noise = this.noiseBuffer(3);
     this.buildAmbient();
     this.buildStatic();
@@ -187,7 +200,72 @@ export class AudioEngine {
     lfo.start();
     n.connect(bp).connect(chop).connect(this.staticGain);
     n.start(0, 0.5);
+    // 낮은 웅웅거림 층 (무전기 험)
+    const hum = ctx.createOscillator();
+    hum.type = 'sawtooth';
+    hum.frequency.value = 60;
+    const humF = ctx.createBiquadFilter();
+    humF.type = 'bandpass';
+    humF.frequency.value = 240;
+    humF.Q.value = 3;
+    const humG = ctx.createGain();
+    humG.gain.value = 0.25;
+    hum.connect(humF).connect(humG).connect(this.staticGain);
+    hum.start();
+    // 일그러진 무전 질감
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.distCurve(30);
+    const n2 = this.noiseSrc(true);
+    const bp2 = ctx.createBiquadFilter();
+    bp2.type = 'bandpass';
+    bp2.frequency.value = 900;
+    bp2.Q.value = 1.5;
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.35;
+    n2.connect(bp2).connect(shaper).connect(g2).connect(this.staticGain);
+    n2.start(0, 1.3);
     this.out(this.staticGain, 0);
+    this.garbleT = 0;
+    this.hotPrev = false;
+  }
+
+  /** 수신기에 섞여 들리는 일그러진 목소리 조각 */
+  garble(vol) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const dur = 0.35 + Math.random() * 0.6;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(110 + Math.random() * 90, t);
+    for (let k = 0.06; k < dur; k += 0.06) o.frequency.setValueAtTime(100 + Math.random() * 140, t + k);
+    const sum = ctx.createGain();
+    for (const base of [650, 1200]) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 6;
+      f.frequency.setValueAtTime(base, t);
+      for (let k = 0.08; k < dur; k += 0.08) f.frequency.setValueAtTime(base * (0.6 + Math.random() * 0.9), t + k);
+      o.connect(f).connect(sum);
+    }
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 450;
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.distCurve(40);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+    for (let k = 0.05; k < dur; k += 0.05 + Math.random() * 0.06) g.gain.setValueAtTime(Math.random() < 0.35 ? vol * 0.1 : vol, t + k);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    sum.connect(hp).connect(shaper).connect(g);
+    this.out(g, 0.1);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  /** 송신이 가까워질 때 울리는 경고 삑 */
+  squelch() {
+    this.uiTone(1900, 1850, 0.07, 0.07);
+    setTimeout(() => this.uiTone(1250, 1200, 0.1, 0.07), 90);
   }
 
   /** 송신의 목소리: 포먼트 필터를 거친 웃음 섞인 웅얼거림 */
@@ -331,6 +409,14 @@ export class AudioEngine {
     // 감지기 잡음
     const prox = s.proximity;
     this.staticGain.gain.setTargetAtTime(prox * prox * 0.32, t, 0.05);
+    this.garbleT -= dt;
+    if (prox > 0.55 && this.garbleT <= 0) {
+      this.garbleT = 0.8 + Math.random() * (3.5 - prox * 2.5);
+      this.garble(0.05 + prox * 0.12);
+    }
+    const hot = prox > 0.65;
+    if (hot && !this.hotPrev) this.squelch();
+    this.hotPrev = hot;
     this.crackleT -= dt;
     if (prox > 0.25 && this.crackleT <= 0) {
       this.crackleT = 0.03 + Math.random() * (0.4 * (1 - prox));
@@ -368,34 +454,243 @@ export class AudioEngine {
     n.start(t, Math.random() * 2, 0.05);
   }
 
-  footstep(vol = 0.5, pos = null) {
+  /**
+   * 발소리: 뒤꿈치 → 앞꿈치 2단 타격 + 표면 질감 + 계단실 메아리
+   * surface: 'stair' | 'landing' | 'room', kind: 'walk' | 'run' | 'sneak'
+   */
+  footstep(vol = 0.5, pos = null, surface = 'stair', kind = 'walk') {
+    if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;
-    const n = this.noiseSrc();
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 700 + Math.random() * 400;
-    const g = ctx.createGain();
-    this.env(g, t, 0.004, vol * 0.5, 0.09);
-    n.connect(lp).connect(g);
-    const o = ctx.createOscillator();
-    o.frequency.setValueAtTime(95, t);
-    o.frequency.exponentialRampToValueAtTime(45, t + 0.1);
-    const og = ctx.createGain();
-    this.env(og, t, 0.003, vol * 0.7, 0.11);
-    o.connect(og);
-    let dest = g;
+    const pitch = 0.88 + Math.random() * 0.24;
+    const bus = ctx.createGain();
+    let dest = bus;
     if (pos) {
       const p = this.panner(pos.x, pos.y, pos.z, 2, 1.1);
-      g.connect(p);
-      og.connect(p);
+      bus.connect(p);
       dest = p;
-    } else {
-      og.connect(g);
     }
-    this.out(dest, 0.6);
-    n.start(t, Math.random() * 2, 0.15);
+    if (kind === 'sneak') {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 650;
+      const pre = ctx.createGain();
+      pre.connect(lp).connect(bus);
+      this.stepHits(pre, t, vol, pitch, surface);
+    } else {
+      this.stepHits(bus, t, vol, pitch, surface);
+    }
+    // 달릴 때 옷 스치는 소리
+    if (kind === 'run') {
+      const n = this.noiseSrc();
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2200 + Math.random() * 800;
+      bp.Q.value = 0.8;
+      const g = ctx.createGain();
+      this.env(g, t, 0.03, vol * 0.12, 0.12);
+      n.connect(bp).connect(g).connect(bus);
+      n.start(t, Math.random() * 2, 0.2);
+    }
+    const wet = surface === 'room' ? 0.15 : surface === 'landing' ? 0.45 : 0.6;
+    this.out(dest, wet);
+    if (surface !== 'room' && !pos) {
+      const s = ctx.createGain();
+      s.gain.value = surface === 'stair' ? 0.35 : 0.22;
+      dest.connect(s).connect(this.slapIn);
+    }
+  }
+
+  stepHits(bus, t, vol, pitch, surface) {
+    const ctx = this.ctx;
+    const hit = (time, v, pm) => {
+      // 신발 밑창이 닿는 소리 (대역 잡음)
+      const n = this.noiseSrc();
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = (surface === 'room' ? 700 : surface === 'landing' ? 950 : 1150) * pm * pitch;
+      bp.Q.value = 1.1;
+      const g = ctx.createGain();
+      this.env(g, time, 0.003, v * 0.55, 0.06);
+      n.connect(bp).connect(g).connect(bus);
+      n.start(time, Math.random() * 2, 0.1);
+      // 모래 알갱이 긁힘
+      const n2 = this.noiseSrc();
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 4200;
+      const g2 = ctx.createGain();
+      this.env(g2, time, 0.001, v * 0.16, 0.025);
+      n2.connect(hp).connect(g2).connect(bus);
+      n2.start(time, Math.random() * 2, 0.05);
+      // 몸무게가 실리는 저음
+      const o = ctx.createOscillator();
+      o.frequency.setValueAtTime(115 * pitch * (pm > 1 ? 1.3 : 1), time);
+      o.frequency.exponentialRampToValueAtTime(48, time + 0.09);
+      const og = ctx.createGain();
+      this.env(og, time, 0.003, v * (pm > 1 ? 0.3 : 0.75), 0.1);
+      o.connect(og).connect(bus);
+      o.start(time);
+      o.stop(time + 0.14);
+      // 계단 디딤판의 속이 빈 울림
+      if (surface === 'stair') {
+        const n3 = this.noiseSrc();
+        const ring = ctx.createBiquadFilter();
+        ring.type = 'bandpass';
+        ring.frequency.value = 170 + Math.random() * 40;
+        ring.Q.value = 9;
+        const g3 = ctx.createGain();
+        this.env(g3, time, 0.004, v * 0.9, 0.2);
+        n3.connect(ring).connect(g3).connect(bus);
+        n3.start(time, Math.random() * 2, 0.25);
+      }
+    };
+    hit(t, vol, 1); // 뒤꿈치
+    hit(t + 0.045 + Math.random() * 0.03, vol * 0.5, 1.7); // 앞꿈치
+  }
+
+  /** 넘어짐: 미끄러짐 → 옷 펄럭 → 몸이 바닥에 부딪힘 → 손전등이 굴러감 → 신음 */
+  fall() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    // 신발 미끄러지는 소리
+    const s = this.noiseSrc();
+    const sbp = ctx.createBiquadFilter();
+    sbp.type = 'bandpass';
+    sbp.Q.value = 2;
+    sbp.frequency.setValueAtTime(3200, t);
+    sbp.frequency.exponentialRampToValueAtTime(700, t + 0.16);
+    const sg = ctx.createGain();
+    this.env(sg, t, 0.01, 0.35, 0.16);
+    s.connect(sbp).connect(sg);
+    this.out(sg, 0.3);
+    s.start(t, Math.random(), 0.25);
+    // 옷 펄럭
+    const w = this.noiseSrc();
+    const wbp = ctx.createBiquadFilter();
+    wbp.type = 'bandpass';
+    wbp.frequency.value = 900;
+    wbp.Q.value = 0.6;
+    const wg = ctx.createGain();
+    wg.gain.setValueAtTime(0.0001, t + 0.04);
+    wg.gain.exponentialRampToValueAtTime(0.28, t + 0.22);
+    wg.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    w.connect(wbp).connect(wg);
+    this.out(wg, 0.2);
+    w.start(t + 0.04, Math.random(), 0.35);
+    // 바닥에 부딪힘 (넘어짐 연출의 충돌 시점에 맞춤)
+    const ti = t + 0.3;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(78, ti);
+    o.frequency.exponentialRampToValueAtTime(30, ti + 0.5);
+    const og = ctx.createGain();
+    this.env(og, ti, 0.004, 1.0, 0.55);
+    o.connect(og);
+    this.out(og, 0.5);
+    o.start(ti);
+    o.stop(ti + 0.6);
+    const b = this.noiseSrc();
+    const blp = ctx.createBiquadFilter();
+    blp.type = 'lowpass';
+    blp.frequency.value = 520;
+    const bg = ctx.createGain();
+    this.env(bg, ti, 0.002, 0.9, 0.28);
+    b.connect(blp).connect(bg);
+    this.out(bg, 0.6);
+    b.start(ti, Math.random(), 0.35);
+    if (this.slapIn) {
+      const e = ctx.createGain();
+      e.gain.value = 0.5;
+      bg.connect(e).connect(this.slapIn);
+    }
+    // 무릎/팔꿈치 두 번째 충돌
+    this.stepHits(this.master, ti + 0.11, 0.7, 0.8, 'stair');
+    // 손전등이 바닥을 구르는 금속음
+    const clatter = (tc, v) => {
+      for (const f of [2350, 3170, 4420, 5930]) {
+        const m = ctx.createOscillator();
+        m.type = 'sine';
+        m.frequency.value = f * (0.95 + Math.random() * 0.1);
+        const mg = ctx.createGain();
+        this.env(mg, tc, 0.001, v * 0.06, 0.22 + Math.random() * 0.1);
+        m.connect(mg);
+        this.out(mg, 0.5);
+        m.start(tc);
+        m.stop(tc + 0.4);
+      }
+      this.click(v * 0.35);
+    };
+    clatter(ti + 0.05, 1);
+    clatter(ti + 0.22, 0.6);
+    clatter(ti + 0.34, 0.35);
+    clatter(ti + 0.42, 0.2);
+    // 신음 섞인 숨
+    const g2 = this.noiseSrc();
+    const f1 = ctx.createBiquadFilter();
+    f1.type = 'bandpass';
+    f1.Q.value = 4;
+    f1.frequency.setValueAtTime(700, ti + 0.25);
+    f1.frequency.linearRampToValueAtTime(420, ti + 0.85);
+    const gg = ctx.createGain();
+    gg.gain.setValueAtTime(0.0001, ti + 0.25);
+    gg.gain.exponentialRampToValueAtTime(0.22, ti + 0.4);
+    gg.gain.exponentialRampToValueAtTime(0.0001, ti + 0.9);
+    g2.connect(f1).connect(gg);
+    this.out(gg, 0.2);
+    g2.start(ti + 0.25, Math.random(), 0.7);
+  }
+
+  // ---------------- 메뉴 효과음 ----------------
+  uiTone(f0, f1, dur, vol, type = 'sine') {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ctx.createGain();
+    this.env(g, t, 0.004, vol, dur);
+    o.connect(g);
+    this.out(g, 0.25);
     o.start(t);
-    o.stop(t + 0.15);
+    o.stop(t + dur + 0.05);
+  }
+
+  uiMove() {
+    this.uiTone(2100, 1700, 0.05, 0.035);
+    if (this.ctx) this.click(0.05);
+  }
+
+  uiSelect() {
+    this.uiTone(160, 70, 0.16, 0.22);
+    this.uiTone(1300, 900, 0.07, 0.04);
+  }
+
+  uiBack() {
+    this.uiTone(900, 520, 0.1, 0.06);
+  }
+
+  uiDeny() {
+    this.uiTone(150, 140, 0.08, 0.08, 'square');
+    setTimeout(() => this.uiTone(130, 120, 0.1, 0.08, 'square'), 110);
+  }
+
+  uiStart() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    // 거꾸로 차오르는 잡음 + 묵직한 충격음
+    const n = this.noiseSrc();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(300, t);
+    bp.frequency.exponentialRampToValueAtTime(2400, t + 0.55);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25, t + 0.55);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
+    n.connect(bp).connect(g);
+    this.out(g, 0.4);
+    n.start(t, 0, 0.7);
+    setTimeout(() => this.boom(0.8), 560);
   }
 
   heartbeat(vol) {
@@ -713,8 +1008,7 @@ export class AudioEngine {
   }
 
   thud() {
-    this.boom(0.7);
-    this.footstep(1.2);
+    this.fall();
   }
 
   glitch(vol = 0.4) {

@@ -22,7 +22,7 @@ const KEY = 'songsin-stairs-progress';
 
 export class Progress {
   constructor() {
-    this.data = { ach: {}, cleared: {}, deaths: 0, notes: [] };
+    this.data = { ach: {}, cleared: {}, deaths: 0, notes: [], hints: [] };
     try {
       Object.assign(this.data, JSON.parse(localStorage.getItem(KEY) || '{}'));
     } catch {

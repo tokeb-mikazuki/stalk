@@ -65,7 +65,7 @@ class Game {
     this.scene.add(this.camera);
     this.scene.add(new THREE.HemisphereLight(0x3a4250, 0x050505, 0.025));
 
-    this.world = buildWorld(this.scene);
+    this.world = null; // load() 에서 생성
     this.progress = new Progress();
 
     // CCTV: 비상실 모니터에 비치는 문 앞 계단참
@@ -122,26 +122,46 @@ class Game {
       if (document.hidden) this.pause();
     });
 
-    this.applyQuality();
     window.addEventListener('resize', () => this.resize());
     this.resize();
     this.bindInput();
     this.bindUI();
-
-    new THREE.TextureLoader().load(songsinUrl, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      this.stalker = new Stalker(this.scene, tex);
-      this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.04, fog: true }));
-      const aspect = tex.image.width / tex.image.height;
-      this.phantom.scale.set(1.8 * aspect, 1.8, 1);
-      this.phantom.visible = false;
-      this.scene.add(this.phantom);
-      this.director = new Director(this, this.phantom);
-      document.querySelector('#scare img').src = songsinUrl;
-      this.enterTitle();
-    });
-
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  /** 로딩: 단계마다 진행률을 알리며 무거운 준비 작업을 나눠서 한다 */
+  async load(report) {
+    const tick = () => new Promise((r) => setTimeout(r, 40));
+    report(0.06, '계단실 설계 중');
+    await tick();
+    this.world = buildWorld(this.scene);
+    report(0.45, '조명과 그림자 설치 중');
+    await tick();
+    this.applyQuality();
+    report(0.6, '송신을 깨우는 중');
+    await tick();
+    const tex = await new THREE.TextureLoader().loadAsync(songsinUrl);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.stalker = new Stalker(this.scene, tex);
+    this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.04, fog: true }));
+    const aspect = tex.image.width / tex.image.height;
+    this.phantom.scale.set(1.8 * aspect, 1.8, 1);
+    this.phantom.visible = false;
+    this.scene.add(this.phantom);
+    this.director = new Director(this, this.phantom);
+    document.querySelector('#scare img').src = songsinUrl;
+    report(0.75, '셰이더 컴파일 중');
+    await tick();
+    this.enterTitle(false);
+    this.updateTitle(0.016);
+    try {
+      this.renderer.compile(this.scene, this.camera);
+      this.post.render(this.scene, this.camera);
+    } catch {
+      /* 미리 컴파일 실패해도 진행 */
+    }
+    report(1, '준비 완료');
+    await tick();
   }
 
   // ------------------------------------------------------------------ 설정/입력
@@ -164,6 +184,7 @@ class Game {
   }
 
   applyAnisotropy() {
+    if (!this.world) return;
     const a = Math.min(this.quality.aniso, this.renderer.capabilities.getMaxAnisotropy());
     const set = (t) => { if (t && t.anisotropy !== a) { t.anisotropy = a; t.needsUpdate = true; } };
     for (const t of Object.values(this.world.tex)) {
@@ -307,12 +328,27 @@ class Game {
         if (act === 'start') {
           const dk = b.dataset.diff;
           if (dk === 'nightmare' && !this.progress.isCleared('hard')) {
+            this.audio.uiDeny();
             this.hud.toast('하드 모드를 클리어하면 열립니다.');
             return;
           }
+          this.audio.uiStart();
           this.start(dk);
+          return;
+        }
+        if (act === 'back') this.audio.uiBack();
+        else this.audio.uiSelect();
+        if (act === 'newgame') {
+          this.refreshTitle();
+          backTo = 'title';
+          this.hud.screen('newgame');
+        } else if (act === 'reset-hints') {
+          this.progress.data.hints = [];
+          this.progress.save();
+          this.hud.toast('다음 판부터 안내 문구가 다시 표시됩니다.');
         } else if (act === 'achievements') {
           this.renderAchievements();
+          backTo = 'title';
           this.hud.screen('achievements');
         } else if (act === 'howto' || act === 'settings') {
           backTo = this.state === 'paused' ? 'pause' : 'title';
@@ -324,24 +360,59 @@ class Game {
       });
     });
 
+    // 메뉴: 마우스를 올리면 선택 표시 + 효과음, 키보드 ↑↓←→ / Enter / Esc
+    document.querySelectorAll('[data-nav]').forEach((el) => {
+      el.addEventListener('mouseenter', () => {
+        if (document.activeElement !== el) {
+          el.focus({ preventScroll: true });
+          this.audio.uiMove();
+        }
+      });
+    });
+    window.addEventListener('keydown', (e) => {
+      if (!['title', 'paused', 'dead', 'won'].includes(this.state)) return;
+      const items = [...document.querySelectorAll('.screen.on [data-nav]')].filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement);
+      const next = ['ArrowDown', 'ArrowRight', 'KeyS', 'KeyD', 'Tab'].includes(e.code) && !e.shiftKey;
+      const prev = ['ArrowUp', 'ArrowLeft', 'KeyW', 'KeyA'].includes(e.code) || (e.code === 'Tab' && e.shiftKey);
+      if (next || prev) {
+        e.preventDefault();
+        const j = i < 0 ? 0 : (i + (next ? 1 : -1) + items.length) % items.length;
+        items[j].focus({ preventScroll: true });
+        this.audio.uiMove();
+      } else if (e.code === 'Enter' || e.code === 'Space') {
+        if (i >= 0) {
+          e.preventDefault();
+          items[i].click();
+        }
+      } else if (e.code === 'Escape') {
+        const back = document.querySelector('.screen.on [data-act=back]');
+        if (back) back.click();
+        else if (this.state === 'paused') this.resume();
+      }
+    });
   }
 
   renderAchievements() {
     const list = document.getElementById('ach-list');
     const got = ACHIEVEMENTS.filter((a) => this.progress.has(a.id)).length;
     document.getElementById('ach-count').textContent = `${got} / ${ACHIEVEMENTS.length}`;
+    document.getElementById('ach-bar').style.width = `${(got / ACHIEVEMENTS.length) * 100}%`;
     list.innerHTML = ACHIEVEMENTS.map((a) => {
       const ok = this.progress.has(a.id);
       const secret = a.hidden && !ok;
-      return `<div class="ach ${ok ? 'ok' : ''}"><b>${secret ? '???' : a.name}</b><span>${secret ? '숨겨진 도전과제' : a.desc}</span></div>`;
+      return `<div class="ach ${ok ? 'ok' : ''}"><div class="ic">${ok ? '◆' : secret ? '?' : '◇'}</div>`
+        + `<div><b>${secret ? '???' : a.name}</b><span>${secret ? '숨겨진 도전과제' : a.desc}</span></div></div>`;
     }).join('');
   }
 
   refreshTitle() {
-    const nm = document.querySelector('[data-diff=nightmare]');
     const open = this.progress.isCleared('hard');
-    nm.classList.toggle('locked', !open);
-    nm.querySelector('small').textContent = open ? '30층 · 정말로 어렵다' : '🔒 하드 클리어 시 해금';
+    document.querySelector('[data-diff=nightmare]').classList.toggle('locked', !open);
+    document.querySelectorAll('.dcard').forEach((c) => c.classList.toggle('cleared', this.progress.isCleared(c.dataset.diff)));
+    const got = ACHIEVEMENTS.filter((a) => this.progress.has(a.id)).length;
+    document.getElementById('ach-mini').textContent = `${got}/${ACHIEVEMENTS.length}`;
   }
 
   /** 난이도마다 층 수가 다르면 타워를 다시 짓는다 */
@@ -383,9 +454,10 @@ class Game {
     }
   }
 
-  enterTitle() {
+  enterTitle(showMenu = true) {
     this.state = 'title';
-    this.hud.screen('title');
+    this.hud.screen(showMenu ? 'title' : null);
+    document.body.classList.add('menu-on');
     this.hud.show(false);
     this.hud.hideNote();
     this.touch.show(false);
@@ -425,8 +497,7 @@ class Game {
     this.glitch = 0;
     this.fear = 0;
     this.closeTimers = [];
-    this.hints = new Set();
-    this.finalStarted = false;
+    this.hints = new Set(this.progress.data.hints || []); // 이미 본 안내는 다시 띄우지 않음
     this.resetDoors();
     this.rollLocks();
     for (const e of this.world.elevators) e.btnMat.color.setHex(0x334433);
@@ -434,6 +505,7 @@ class Game {
     this.placeItems();
     this.hud.screen(null);
     this.hud.show(true);
+    document.body.classList.remove('menu-on');
     this.state = 'playing';
     this.post.uniforms.uFade.value = 1;
     this.post.uniforms.uFlash.value = 0;
@@ -449,15 +521,16 @@ class Game {
         }
       } catch { /* 전체 화면 미지원 */ }
     }
-    this.director.after(1.5, () => this.hud.msg(`목표: ${FLOORS}F 옥상 문으로 탈출`, 3.5));
-    this.director.after(5.5, () => this.hud.msg('엘리베이터 표시기 — 숫자: 송신이 엘리베이터 안 · Err: 계단 위', 4.5));
-    this.director.after(10.5, () => this.hud.msg('초록 비상구 표시 문 = 숨을 곳 · [E] 열기/닫기', 4));
+    this.director.after(1.5, () => this.hint('intro-goal', `목표: ${FLOORS}F 옥상 문으로 탈출`, 3.5));
+    this.director.after(5.5, () => this.hint('intro-elevator', '엘리베이터 표시기 — 숫자: 송신이 엘리베이터 안 · Err: 계단 위', 4.5));
+    this.director.after(10.5, () => this.hint('intro-door', '초록 비상구 표시 문 = 숨을 곳 · [E] 열기/닫기', 4));
   }
 
   pause() {
     if (this.state !== 'playing') return;
     this.closeCctv();
     this.state = 'paused';
+    document.getElementById('pause-info').textContent = `${this.diff.label} · ${this.player.floor + 1}F / ${FLOORS}F · ${formatTime(this.time)}`;
     this.hud.screen('pause');
     this.touch.show(false);
     // 30초 넘게 멈춰 있으면 화면이 깨진다
@@ -533,9 +606,12 @@ class Game {
     this.clock.getDelta();
   }
 
+  /** 안내 문구: 처음 한 번만 표시하고 브라우저에 기록 (다음 판부터는 안 뜸) */
   hint(id, text, dur = 4) {
     if (this.hints.has(id)) return;
     this.hints.add(id);
+    this.progress.data.hints = [...this.hints];
+    this.progress.save();
     this.hud.msg(text, dur);
   }
 
@@ -901,6 +977,7 @@ class Game {
       this.updateLamps(dt);
       this.updateDoors(dt);
     }
+    if (this.state === 'playing') this.fx.setHeight(this.player.footY / Math.max(1, (FLOORS - 1) * FLOOR_H));
     this.fx.update(dt, (this.state === 'playing' || this.state === 'winning') && !this.cctv && !this.director?.torchKill, this.pixelRatio);
     this.hud.update(dt);
     this.glitch = Math.max(0, this.glitch - dt * 1.6);
@@ -974,22 +1051,19 @@ class Game {
       p.torch.intensity = 0;
       p.lensMat.color.setScalar(0.08);
     }
-    if (ev.footstep) this.audio.footstep(ev.footstep);
+    if (ev.footstep) {
+      const surface = p.inRoom ? 'room' : onLanding(p.phi) ? 'landing' : 'stair';
+      const kind = p.crouching ? 'sneak' : p.sprinting ? 'run' : 'walk';
+      this.audio.footstep(ev.footstep, null, surface, kind);
+    }
     if (ev.trip) {
-      this.audio.thud();
-      this.director.after(0.32, () => this.audio.thud());
+      this.audio.fall();
       if (ev.tripExhausted && !this.hints.has('tripTip')) this.hint('tripTip', 'TIP: 체력이 바닥난 채로 달리면 넘어질 수 있다', 4.5);
       else this.hud.msg('넘어졌다', 1.8);
       this.glitchPulse(0.35);
     }
     if (p.inRoom) this.hint('room', '[E] 문 닫기 → 송신이 못 들어옴 · 오래 숨으면 들킨다 · 모니터 = CCTV', 4.5);
 
-    // 마지막 추격: 높은 층에 다다르면 송신이 위에서 내려온다
-    if (!this.finalStarted && p.maxFloor >= this.diff.finalFloor) {
-      this.finalStarted = true;
-      this.hud.msg('송신이 위층에서 내려온다 — 계속 올라가라', 3.5);
-      this.director.after(2.5, () => this.triggerHunt('final', 2));
-    }
 
     s.update(dt, p, this);
     this.director.update(dt);
@@ -1145,11 +1219,14 @@ class Game {
       s.faceMat.color.setScalar(0.8);
       this.unlock();
       this.hud.stats('dead', [
-        `도달한 층: <b>${this.player.maxFloor + 1}F</b> / ${FLOORS}F`,
-        `생존 시간: ${formatTime(this.time)}`,
-        `따돌린 추격: ${this.chases}회`,
-        `난이도: ${this.diff.label}`,
+        ['도달한 층', `${this.player.maxFloor + 1}F / ${FLOORS}F`, true],
+        ['생존 시간', formatTime(this.time)],
+        ['따돌린 추격', `${this.chases}회`],
+        ['난이도', this.diff.label],
       ]);
+      const subs = ['계단은 아직 끝나지 않았다', '송신은 웃고 있었다', '엘리베이터가 다시 움직인다', '조금만 더 올라갔다면'];
+      document.getElementById('dead-sub').textContent = subs[Math.floor(Math.random() * subs.length)];
+      document.body.classList.add('menu-on');
       this.hud.screen('dead');
     }
   }
@@ -1166,11 +1243,12 @@ class Game {
       this.unlock();
       this.hud.show(false);
       this.hud.stats('win', [
-        `탈출 시간: <b>${formatTime(this.time)}</b>`,
-        `따돌린 추격: ${this.chases}회`,
-        `난이도: ${this.diff.label}`,
-        ...(this.unlockedNightmare ? ['<b style="color:#7a1010">악몽 모드가 열렸다… (30층)</b>'] : []),
+        ['탈출 시간', formatTime(this.time), true],
+        ['따돌린 추격', `${this.chases}회`],
+        ['숨은 횟수', `${this.run.hides}회`],
+        ['난이도', this.diff.label],
       ]);
+      if (this.unlockedNightmare) this.hud.toast('악몽 모드 해금 — 30층');
       this.hud.screen('win');
       const after = document.querySelector('#win .after');
       after.classList.remove('on');
@@ -1278,5 +1356,83 @@ function saveSettings(s) {
   }
 }
 
-const game = new Game();
-window.__songsin = game; // 디버그용
+// ------------------------------------------------------------------ 부팅
+const LOADING_TIPS = [
+  '엘리베이터 표시기에 층수가 보이면, 송신은 엘리베이터 안에 있다.',
+  '표시기에 Err가 뜨면 송신은 계단 어딘가에 있다.',
+  '초록 비상구 표시등이 켜진 문 안으로 숨을 수 있다. 문은 꼭 닫아라.',
+  '비상실 안의 CCTV로 문 앞에 무엇이 있는지 확인할 수 있다.',
+  '같은 층에 오래 머물면 조명이 깜빡이기 시작한다. 그건 경고다.',
+  '달리면 빠르지만, 발소리는 계단 전체에 울린다.',
+  '손전등 빛은 멀리서도 보인다. 하지만 끄면 아무것도 보이지 않는다.',
+  '체력이 바닥난 채로 달리면 넘어진다.',
+  '위로 올라갈수록 송신은 더 예민해진다.',
+  '일시정지 뒤에 오래 숨어 있지 마라.',
+];
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+function waitInput(el, ms = Infinity) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('keydown', finish);
+      el.removeEventListener('pointerdown', finish);
+      resolve();
+    };
+    window.addEventListener('keydown', finish);
+    el.addEventListener('pointerdown', finish);
+    if (ms !== Infinity) setTimeout(finish, ms);
+  });
+}
+
+async function boot() {
+  const $ = (id) => document.getElementById(id);
+  // 1) 주의 문구
+  const bootEl = $('boot');
+  await wait(400);
+  await waitInput(bootEl, 3600);
+  bootEl.classList.add('out');
+  await wait(700);
+  bootEl.classList.remove('on', 'out');
+
+  // 2) 로딩 (실제 진행률 + 팁)
+  const loading = $('loading');
+  loading.classList.add('on');
+  const tipEl = $('ld-tip-text');
+  let tipI = Math.floor(Math.random() * LOADING_TIPS.length);
+  tipEl.textContent = LOADING_TIPS[tipI];
+  const tipTimer = setInterval(() => {
+    tipI = (tipI + 1) % LOADING_TIPS.length;
+    tipEl.parentElement.style.opacity = 0;
+    setTimeout(() => {
+      tipEl.textContent = LOADING_TIPS[tipI];
+      tipEl.parentElement.style.opacity = 1;
+    }, 450);
+  }, 3200);
+  await wait(250);
+  const game = new Game();
+  window.__songsin = game; // 디버그용
+  await game.load((p, step) => {
+    $('ld-fill').style.width = `${Math.round(p * 100)}%`;
+    $('ld-pct').textContent = `${Math.round(p * 100)}%`;
+    $('ld-step').textContent = step;
+  });
+  await wait(600);
+  clearInterval(tipTimer);
+  loading.classList.remove('on');
+
+  // 3) 아무 키나 → 메인 메뉴 (이때 소리를 켠다: 브라우저 자동재생 정책)
+  const press = $('press');
+  press.classList.add('on');
+  await waitInput(press);
+  press.classList.remove('on');
+  game.audio.init();
+  game.audio.setVolume(game.settings.vol);
+  game.audio.uiStart();
+  game.refreshTitle();
+  game.hud.screen('title');
+}
+
+boot();

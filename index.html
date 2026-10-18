@@ -4,104 +4,258 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
   <title>공포의 송신계단</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@600;900&display=swap" rel="stylesheet" />
   <style>
     :root {
       --accent: #43ff59;
       --red: #ff3b3b;
-      --text: #d6d6d0;
-      --sub: #7a7a74;
-      --panel: rgba(12, 12, 12, 0.72);
-      --font: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+      --blood: #b3121b;
+      --text: #d9d6cc;
+      --sub: #7d7a72;
+      --line: rgba(255,255,255,.12);
+      --panel: rgba(10, 10, 10, 0.78);
+      --font: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+      --serif: "Noto Serif KR", "Nanum Myeongjo", "Batang", serif;
+      --mono: "Consolas", "Courier New", monospace;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; touch-action: none; overscroll-behavior: none; }
     body { color: var(--text); font-family: var(--font); user-select: none; -webkit-user-select: none; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
     #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    @keyframes blink { 50% { opacity: .35; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+    /* 화면 전체 필름 그레인 (메뉴용) */
+    .grain { position: fixed; inset: -50%; z-index: 19; pointer-events: none; opacity: .09; display: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      animation: grain 0.8s steps(6) infinite; }
+    body.menu-on .grain { display: block; }
+    @keyframes grain { 0% { transform: translate(0,0); } 20% { transform: translate(-5%,3%); } 40% { transform: translate(3%,-6%); } 60% { transform: translate(-7%,-2%); } 80% { transform: translate(6%,5%); } 100% { transform: translate(-2%,7%); } }
+
+    /* ---------- 부팅: 주의 문구 / 로딩 / 시작 대기 ---------- */
+    #boot, #loading, #press { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; flex-direction: column; background: #000; text-align: center; padding: 24px; }
+    #boot.on, #loading.on, #press.on { display: flex; }
+    #boot .warn-box { max-width: 620px; animation: fadeIn 1.2s ease both; }
+    #boot .warn-icon { width: 54px; height: 54px; margin: 0 auto 18px; border: 2px solid var(--blood); border-radius: 50%; display: grid; place-items: center; color: var(--blood); font-weight: 900; font-size: 28px; }
+    #boot h2 { font-family: var(--serif); font-weight: 900; font-size: clamp(22px, 2.4vw, 32px); letter-spacing: 6px; color: #e6e2d6; }
+    #boot p { margin-top: 16px; color: #9b978d; line-height: 1.9; font-size: clamp(13px, 1vw + .4vh, 17px); }
+    #boot .skip, #press .skip { position: absolute; bottom: 26px; left: 0; right: 0; font-size: 12px; color: #4d4b46; letter-spacing: 3px; }
+    #boot.out { animation: fadeOut .8s forwards; }
+    @keyframes fadeOut { to { opacity: 0; } }
+
+    #loading { justify-content: flex-end; align-items: stretch; padding: 0 6vw 7vh; background: radial-gradient(ellipse at 70% 40%, #141414 0%, #000 70%); }
+    #loading .ld-logo { position: absolute; top: 34%; left: 6vw; text-align: left; }
+    #loading .ld-logo .en { font-size: 12px; letter-spacing: 8px; color: #6f6c64; }
+    #loading .ld-logo .ko { font-family: var(--serif); font-weight: 900; font-size: clamp(34px, 5vw, 64px); letter-spacing: 6px; color: #d9d5c9; margin-top: 4px; }
+    #loading .ld-tip { text-align: left; color: #8c897f; font-size: clamp(12px, .8vw + .4vh, 16px); min-height: 2.4em; transition: opacity .5s; }
+    #loading .ld-tip b { color: var(--blood); font-weight: 700; margin-right: 10px; letter-spacing: 2px; }
+    #loading .ld-row { display: flex; justify-content: space-between; margin-top: 18px; font-size: 12px; letter-spacing: 3px; color: #5f5c55; }
+    #loading .ld-bar { height: 2px; background: #1c1c1c; margin-top: 8px; overflow: hidden; }
+    #loading .ld-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5a0a0e, #d01c25); transition: width .35s ease; box-shadow: 0 0 10px rgba(208,28,37,.6); }
+
+    #press { background: transparent; z-index: 21; justify-content: flex-end; padding-bottom: 14vh; }
+    #press .logo { position: absolute; top: 28%; left: 0; right: 0; }
+    #press .press-key { font-size: clamp(13px, 1vw + .3vh, 18px); letter-spacing: 8px; color: #cfcabd; animation: pulse 2.4s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+    /* ---------- 로고 ---------- */
+    .logo .en { font-size: clamp(10px, .7vw, 13px); letter-spacing: 1.1em; color: #77736a; margin-bottom: 10px; padding-left: 1.1em; }
+    .logo h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(40px, 7vw, 104px); letter-spacing: .12em; color: #ebe7dc; line-height: 1.05;
+      text-shadow: 0 0 30px rgba(0,0,0,.9), 3px 0 rgba(200,0,0,.35), -3px 0 rgba(0,200,200,.18); animation: flick 7s infinite; }
+    .logo .line { width: min(420px, 60vw); height: 1px; margin: 16px auto 0; background: linear-gradient(90deg, transparent, var(--blood), transparent); }
+    @keyframes flick { 0%, 91%, 100% { opacity: 1; transform: none; } 92% { opacity: .35; } 93% { opacity: 1; } 95% { opacity: .55; transform: translateX(4px) skewX(-6deg); } 96% { opacity: 1; transform: none; } }
+
+    /* ---------- 공통 화면 ---------- */
+    .screen { position: fixed; inset: 0; z-index: 20; display: none; flex-direction: column; overflow-y: auto; touch-action: pan-y; }
+    .screen.on { display: flex; animation: fadeIn .35s ease both; }
+    .dim { background: rgba(0,0,0,.72); }
+    .shade-left { background: linear-gradient(90deg, rgba(0,0,0,.92) 0%, rgba(0,0,0,.65) 38%, rgba(0,0,0,0) 70%); }
+    .screen-head { padding: 7vh 7vw 0; }
+    .screen-head .en { font-size: 11px; letter-spacing: .8em; color: #6f6b62; }
+    .screen-head h2 { font-family: var(--serif); font-weight: 900; font-size: clamp(26px, 3vw, 42px); letter-spacing: .15em; color: #e8e4d8; margin-top: 6px; }
+    .screen-head .line { width: 120px; height: 2px; background: var(--blood); margin-top: 14px; }
+    .screen-foot { margin-top: auto; padding: 18px 7vw 22px; display: flex; gap: 26px; align-items: center; font-size: 12px; letter-spacing: 2px; color: #5c5a54; }
+    .screen-foot kbd { font-family: var(--mono); color: #9a968c; border: 1px solid #3a3a3a; padding: 1px 6px; margin-right: 6px; font-size: 11px; }
+
+    /* 메뉴 항목 */
+    .menu { display: flex; flex-direction: column; gap: 2px; }
+    .mi { position: relative; text-align: left; padding: 10px 0 10px 34px; font-size: clamp(17px, 1.3vw + .4vh, 24px); letter-spacing: .14em; color: #a7a398; transition: color .2s, transform .2s, letter-spacing .25s; outline: none; }
+    .mi::before { content: ''; position: absolute; left: 0; top: 50%; width: 0; height: 2px; background: var(--blood); transform: translateY(-50%); transition: width .25s ease; box-shadow: 0 0 8px rgba(200,20,30,.7); }
+    .mi:hover, .mi:focus, .mi.sel { color: #fff; transform: translateX(6px); letter-spacing: .2em; }
+    .mi:hover::before, .mi:focus::before, .mi.sel::before { width: 22px; }
+    .mi em { font-style: normal; font-size: .62em; color: #6c695f; margin-left: 12px; letter-spacing: .1em; }
+    .mi.danger:hover, .mi.danger.sel { color: #ff6b6b; }
+    .mi small { display: block; font-size: .55em; color: #6c695f; letter-spacing: .1em; margin-top: 2px; }
+
+    /* 타이틀 */
+    #title { justify-content: center; padding: 0 7vw; }
+    #title .logo { text-align: left; margin-bottom: 6vh; }
+    #title .logo .en { padding-left: 0; }
+    #title .logo .line { margin: 16px 0 0; }
+    #title .logo .tag { margin-top: 14px; font-size: clamp(12px, .8vw + .3vh, 15px); color: #8c887d; letter-spacing: .35em; }
+    #title .menu { width: min(380px, 80vw); }
+    #title .title-foot { position: absolute; left: 7vw; right: 7vw; bottom: 22px; display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 2px; color: #4f4d47; }
+    #title .title-foot kbd { font-family: var(--mono); color: #8a867c; border: 1px solid #333; padding: 0 5px; margin-right: 4px; }
+
+    /* 난이도 카드 */
+    #newgame .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 4vh 7vw 0; }
+    .dcard { position: relative; text-align: left; padding: 22px 20px 20px; background: linear-gradient(180deg, rgba(20,20,20,.92), rgba(8,8,8,.92)); border: 1px solid #262626; min-height: 330px; display: flex; flex-direction: column; transition: border-color .2s, transform .2s, box-shadow .2s; outline: none; }
+    .dcard:hover, .dcard:focus, .dcard.sel { border-color: #6b1a1e; transform: translateY(-6px); box-shadow: 0 18px 40px rgba(0,0,0,.7), 0 0 0 1px rgba(179,18,27,.35) inset; }
+    .dcard .lv { font-family: var(--mono); font-size: 11px; letter-spacing: .4em; color: #6d6a61; }
+    .dcard h3 { font-family: var(--serif); font-weight: 900; font-size: clamp(22px, 1.8vw, 32px); letter-spacing: .12em; margin-top: 8px; color: #ece8dc; }
+    .dcard .floors { font-size: 12px; color: #8c887e; letter-spacing: .2em; margin-top: 4px; }
+    .dcard p { font-size: 13px; color: #9a968b; line-height: 1.7; margin-top: 14px; flex: 1; }
+    .dcard .stat { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; font-size: 11px; color: #77736a; letter-spacing: .1em; margin-top: 8px; }
+    .dcard .stat i { display: block; height: 3px; background: #222; position: relative; }
+    .dcard .stat i::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--v); background: linear-gradient(90deg, #5d0d12, #d3202a); }
+    .dcard .badge { position: absolute; top: 14px; right: 14px; font-size: 11px; letter-spacing: .15em; color: var(--accent); border: 1px solid rgba(67,255,89,.4); padding: 2px 8px; display: none; }
+    .dcard.cleared .badge { display: block; }
+    .dcard.nightmare h3 { color: #ff5a5a; text-shadow: 0 0 14px rgba(255,0,0,.35); }
+    .dcard .lock { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(4,4,4,.94); backdrop-filter: blur(3px); color: #8a867c; font-size: 13px; letter-spacing: .15em; line-height: 1.7; text-align: center; }
+    .dcard .lock b { font-size: 26px; color: #6b1a1e; }
+    .dcard.locked .lock { display: flex; }
+    .dcard.locked { cursor: not-allowed; }
+    #newgame .menu, .back-row { padding: 3vh 7vw 0; }
+
+    /* 패널 (조작법/설정/도전과제) */
+    .panel { margin: 4vh 7vw 0; width: min(760px, 86vw); max-height: calc(100vh - 290px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4a1a1e transparent; background: rgba(8,8,8,.85); border: 1px solid #222; border-left: 2px solid var(--blood); padding: 26px 30px; }
+    .panel h4 { font-size: 12px; letter-spacing: .5em; color: #6f6b62; margin: 18px 0 10px; }
+    .panel h4:first-child { margin-top: 0; }
+    .keys { display: grid; grid-template-columns: 150px 1fr; gap: 10px 18px; font-size: 14px; align-items: center; }
+    .keys kbd { font-family: var(--mono); color: #e6e2d6; font-size: 12px; justify-self: start; border: 1px solid #3c3c3c; border-bottom-width: 3px; padding: 3px 8px; background: #121212; }
+    .tips { font-size: 14px; color: #a39f94; line-height: 1.85; }
+    .tips li { list-style: none; padding-left: 16px; position: relative; }
+    .tips li::before { content: ''; position: absolute; left: 0; top: .8em; width: 6px; height: 1px; background: var(--blood); }
+    .tips b { color: #e2ded2; font-weight: 600; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; font-size: 14px; border-bottom: 1px solid #1b1b1b; }
+    .row .val { font-family: var(--mono); color: #8d897f; font-size: 12px; margin-left: 8px; }
+    .row input[type=range] { -webkit-appearance: none; appearance: none; width: 240px; height: 2px; background: #333; outline: none; }
+    .row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: #e6e2d6; border: 2px solid var(--blood); cursor: pointer; }
+    .row input[type=range]::-moz-range-thumb { width: 12px; height: 12px; background: #e6e2d6; border: 2px solid var(--blood); cursor: pointer; border-radius: 0; }
+    .row select { background: #111; color: var(--text); border: 1px solid #3a3a3a; padding: 6px 10px; font: inherit; font-size: 13px; }
+    .row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--blood); }
+    .small-btn { font-size: 12px; letter-spacing: .15em; padding: 6px 14px; border: 1px solid #3a3a3a; color: #bdb9ae; }
+    .small-btn:hover { border-color: var(--blood); color: #fff; }
+
+    #ach-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ach { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid #1f1f1f; background: rgba(255,255,255,.015); opacity: .5; }
+    .ach .ic { width: 40px; height: 40px; border: 1px solid #333; display: grid; place-items: center; color: #555; font-size: 18px; }
+    .ach.ok { opacity: 1; border-color: #3a2a2a; }
+    .ach.ok .ic { border-color: var(--blood); color: #ff5050; box-shadow: 0 0 10px rgba(179,18,27,.4) inset; }
+    .ach b { display: block; font-size: 14px; letter-spacing: .08em; color: #e3dfd3; }
+    .ach span { font-size: 12px; color: #8f8b81; }
+    .ach-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .ach-prog { height: 2px; background: #222; margin: 6px 0 18px; }
+    .ach-prog i { display: block; height: 100%; background: var(--blood); }
+
+    /* 일시정지 */
+    #pause { justify-content: center; padding: 0 7vw; }
+    #pause .p-head .en { font-size: 11px; letter-spacing: .8em; color: #6f6b62; }
+    #pause .p-head h2 { font-family: var(--serif); font-weight: 900; font-size: clamp(30px, 3.4vw, 48px); letter-spacing: .2em; color: #e8e4d8; margin: 6px 0 4px; }
+    #pause .p-info { font-size: 13px; color: #7f7b71; letter-spacing: .15em; margin-bottom: 4vh; }
+    #pause .menu { width: min(360px, 80vw); }
+    #pause.breaking { animation: breakShake .07s infinite; background: rgba(40,0,0,.65); }
+    #pause.breaking h2 { color: #ff2b2b !important; text-shadow: 5px 0 rgba(0,255,255,.6), -5px 0 rgba(255,0,0,.9) !important; }
+    #pause.breaking .menu, #pause.breaking .p-info { animation: menuFall 1.5s ease-in forwards; }
+    @keyframes breakShake { 0% { transform: translate(0,0); } 25% { transform: translate(-9px,4px) skewX(3deg); } 50% { transform: translate(7px,-5px); } 75% { transform: translate(-4px,-3px) skewX(-5deg); } }
+    @keyframes menuFall { 0% { transform: none; opacity: 1; } 55% { transform: translateY(14px) rotate(-4deg); opacity: .9; } 100% { transform: translateY(110vh) rotate(28deg); opacity: 0; } }
+
+    /* 사망 / 탈출 */
+    #dead, #win { align-items: center; justify-content: center; text-align: center; padding: 24px; }
+    #dead { background: radial-gradient(ellipse at center, rgba(40,0,0,.55) 0%, rgba(0,0,0,.92) 70%); }
+    #dead .big, #win .big { font-family: var(--serif); font-weight: 900; font-size: clamp(38px, 6.5vw, 96px); letter-spacing: .2em; animation: riseIn 1.4s ease both; }
+    #dead .big { color: #d11c25; text-shadow: 0 0 30px rgba(209,28,37,.55); }
+    #dead .sub, #win .sub { margin-top: 12px; font-size: 13px; letter-spacing: .5em; color: #7d796f; animation: fadeIn 2s .6s both; }
+    .stats { margin: 4vh auto 0; display: grid; grid-template-columns: repeat(4, auto); gap: 0; border-top: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a; animation: fadeIn 1.5s .9s both; }
+    .stats .st { padding: 14px 26px; text-align: center; border-left: 1px solid #1d1d1d; }
+    .stats .st:first-child { border-left: 0; }
+    .stats .st span { display: block; font-size: 11px; letter-spacing: .3em; color: #6f6b62; }
+    .stats .st b { display: block; font-size: clamp(16px, 1.3vw, 22px); color: #e6e2d6; margin-top: 4px; font-weight: 500; }
+    .stats .st.hl b { color: #ff5a5a; }
+    .end-menu { display: flex; gap: 36px; margin-top: 4vh; justify-content: center; animation: fadeIn 1.5s 1.2s both; }
+    .end-menu .mi { padding-left: 28px; }
+    #win { background: #efeee9; color: #1a1a1a; }
+    #win .big { color: #161616; }
+    #win .sub { color: #77746c; }
+    #win .stats { border-color: #cfccc4; }
+    #win .stats .st { border-color: #dad7cf; }
+    #win .stats .st span { color: #8a877f; }
+    #win .stats .st b { color: #1b1b1b; }
+    #win .stats .st.hl b { color: #9b1118; }
+    #win .mi { color: #4a4740; }
+    #win .mi:hover, #win .mi.sel { color: #000; }
+    #win .after { margin-top: 4vh; font-size: 14px; color: #8b1016; opacity: 0; transition: opacity 2s; letter-spacing: .3em; }
+    #win .after.on { opacity: 1; }
 
     /* ---------- HUD ---------- */
     #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .6s; }
     #hud.on { opacity: 1; }
-    #floor { position: absolute; top: 22px; left: 26px; }
-    #floor .num { font-size: 44px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,0,0,.9); }
-    #floor .goal { font-size: 13px; color: var(--sub); letter-spacing: 1px; }
-    #floor .goal { font-size: 14px; color: #a9a9a0; }
-    @keyframes blink { 50% { opacity: .35; } }
-    #meters { position: absolute; left: 26px; bottom: 26px; width: 260px; }
-    .meter { margin-top: 8px; }
-    .meter .lbl { font-size: 11px; color: var(--sub); letter-spacing: 1px; display: flex; justify-content: space-between; }
-    .meter .bar { height: 5px; background: rgba(255,255,255,.1); margin-top: 3px; }
-    .meter .fill { height: 100%; width: 100%; background: #d8d8d0; transition: width .1s; }
-    #stamina .fill.ex { background: #8a3b3b; }
-    #battery .fill.low { background: var(--red); }
-
-    /* 원작의 synth meter → 송신 감지기 */
-    #detector { position: absolute; right: 26px; bottom: 26px; width: 230px; padding: 10px 12px 8px; background: var(--panel); border: 1px solid #2a2a2a; }
-    #detector .head { display: flex; justify-content: space-between; font-size: 11px; color: var(--sub); letter-spacing: 1px; }
-    #detector .head b { color: var(--accent); font-weight: 600; }
+    #floor { position: absolute; top: 24px; left: 28px; padding-left: 14px; border-left: 2px solid var(--blood); }
+    #floor .lbl { font-size: 10px; letter-spacing: .5em; color: #77736a; }
+    #floor .num { font-family: var(--serif); font-size: 42px; font-weight: 900; letter-spacing: 2px; line-height: 1.1; text-shadow: 0 0 12px rgba(0,0,0,.9); }
+    #floor .goal { font-size: 12px; color: #a29e93; letter-spacing: .08em; }
+    #meters { position: absolute; left: 28px; bottom: 26px; width: 240px; }
+    .meter { margin-top: 10px; }
+    .meter .lbl { font-size: 10px; color: #8a867c; letter-spacing: .3em; display: flex; justify-content: space-between; }
+    .meter .lbl .v { font-family: var(--mono); letter-spacing: 0; }
+    .meter .bar { height: 3px; background: rgba(255,255,255,.1); margin-top: 4px; }
+    .meter .fill { height: 100%; width: 100%; background: #dcd8cc; transition: width .1s; }
+    #stamina .fill.ex { background: #8a2b2b; }
+    #battery .fill.low { background: var(--red); animation: blink .8s infinite; }
+    #detector { position: absolute; right: 28px; bottom: 26px; width: 230px; padding: 10px 12px 8px; background: linear-gradient(180deg, rgba(12,16,12,.85), rgba(6,8,6,.85)); border: 1px solid #263026; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.6) inset; }
+    #detector .head { display: flex; justify-content: space-between; font-size: 10px; color: #6f7a6f; letter-spacing: .25em; font-family: var(--mono); }
+    #detector .head b { color: var(--accent); font-weight: 600; letter-spacing: .1em; }
+    #detector.hot { border-color: #5a1a1a; }
     #detector.hot .head b { color: var(--red); }
-    #dbars { display: flex; align-items: flex-end; gap: 3px; height: 54px; margin-top: 6px; }
+    #dbars { display: flex; align-items: flex-end; gap: 3px; height: 50px; margin-top: 6px; }
     #dbars i { flex: 1; height: 3px; background: var(--accent); opacity: .3; }
     #detector.hot #dbars i { background: var(--red); }
-
-    #cross { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,.55); }
-    #prompt { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); font-size: 16px; padding: 6px 14px; background: var(--panel); border: 1px solid #333; display: none; white-space: nowrap; }
-    #prompt.on { display: block; }
-    #prompt kbd { color: var(--accent); font-family: inherit; font-weight: 700; margin-right: 6px; }
-    #msg { position: absolute; left: 50%; bottom: 17%; transform: translateX(-50%); font-size: 19px; text-align: center; text-shadow: 0 0 8px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; max-width: 80vw; }
+    #cross { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,.5); box-shadow: 0 0 3px #000; }
+    #prompt { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); font-size: clamp(12px, 0.8vw + 0.7vh, 22px); padding: .4em .9em; background: rgba(8,8,8,.8); border: 1px solid #2c2c2c; display: none; white-space: nowrap; letter-spacing: .05em; }
+    #prompt.on { display: block; animation: fadeIn .2s both; }
+    #prompt kbd { font-family: var(--mono); color: #111; background: #e6e2d6; font-weight: 700; padding: 0 .45em; margin-right: .6em; border-radius: 2px; font-size: .9em; }
+    #msg { position: absolute; left: 50%; bottom: 17%; transform: translateX(-50%); font-size: clamp(13px, 1.1vw + 0.9vh, 28px); line-height: 1.45; padding: 0.3em 0.8em; background: radial-gradient(ellipse at center, rgba(0,0,0,.5), rgba(0,0,0,0) 70%); text-align: center; text-shadow: 0 0 8px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; max-width: 80vw; }
     #msg.on { opacity: 1; }
-    #warn { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); font-size: 64px; font-weight: 900; color: var(--red); letter-spacing: 6px; text-shadow: 0 0 18px var(--red); opacity: 0; }
+    #warn { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); font-family: var(--serif); font-size: clamp(36px, 5vw, 72px); font-weight: 900; color: var(--red); letter-spacing: .3em; text-shadow: 0 0 18px var(--red); opacity: 0; white-space: nowrap; }
     #warn.on { animation: warn 2.2s forwards; }
-    @keyframes warn {
-      0% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); }
-      8% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-      12% { opacity: .2; } 16% { opacity: 1; } 75% { opacity: 1; }
-      100% { opacity: 0; }
-    }
+    @keyframes warn { 0% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); } 8% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 12% { opacity: .2; } 16% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
 
     /* 쪽지 */
-    #note { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
-    #note.on { display: flex; }
-    #note .paper { width: min(460px, 86vw); padding: 30px 32px 22px; background: #d9d3c1; color: #1d1d22; font-size: 17px; line-height: 1.75; box-shadow: 0 10px 40px #000; transform: rotate(-1.2deg); }
-    #note h3 { font-size: 15px; color: #5a1a1a; margin-bottom: 12px; letter-spacing: 1px; }
+    #note { position: fixed; inset: 0; z-index: 15; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
+    #note.on { display: flex; animation: fadeIn .3s both; }
+    #note .paper { width: min(480px, 86vw); padding: 34px 36px 24px; background: #dcd5c2 linear-gradient(180deg, rgba(0,0,0,0) 70%, rgba(80,60,30,.12)); color: #1d1d22; font-family: var(--serif); font-size: 17px; line-height: 1.85; box-shadow: 0 14px 50px #000; transform: rotate(-1.2deg); }
+    #note h3 { font-size: 15px; color: #6a1a1a; margin-bottom: 14px; letter-spacing: .1em; font-weight: 900; }
     #note p { white-space: pre-line; }
-    #note .close { margin-top: 18px; font-size: 12px; color: #5b574c; text-align: right; }
+    #note .close { margin-top: 20px; font-family: var(--font); font-size: 12px; color: #5b574c; text-align: right; letter-spacing: .1em; }
 
-    /* ---------- 화면들 ---------- */
-    .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
-    .screen.on { display: flex; }
-    .dim { background: rgba(0,0,0,.6); }
-    h1.title { font-size: clamp(42px, 8vw, 92px); font-weight: 900; letter-spacing: 8px; color: #e9e6dc; text-shadow: 0 0 24px rgba(255,255,255,.15), 3px 0 rgba(255,0,0,.35), -3px 0 rgba(0,255,255,.2); animation: flick 6s infinite; }
-    @keyframes flick { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .3; } 94% { opacity: 1; } 96% { opacity: .5; transform: translateX(3px); } 97% { opacity: 1; transform: none; } }
-    .subtitle { margin-top: 10px; color: var(--sub); letter-spacing: 3px; font-size: 14px; }
-    .menu { margin-top: 42px; display: flex; flex-direction: column; gap: 10px; width: min(300px, 80vw); }
-    .btn { pointer-events: auto; cursor: pointer; padding: 13px 20px; font: inherit; font-size: 17px; letter-spacing: 2px; color: var(--text); background: rgba(0,0,0,.55); border: 1px solid #555; transition: background .15s, border-color .15s, color .15s; }
-    .btn:hover, .btn:focus-visible { background: rgba(67,255,89,.08); border-color: var(--accent); color: #fff; outline: none; }
-    .btn.danger:hover { border-color: var(--red); background: rgba(255,59,59,.1); }
-    .btn small { display: block; font-size: 11px; color: var(--sub); letter-spacing: 1px; margin-top: 3px; }
-    .panel { width: min(520px, 92vw); max-height: 80vh; overflow: auto; background: rgba(8,8,8,.92); border: 1px solid #333; padding: 24px 26px; text-align: left; margin-top: 18px; }
-    .panel h2 { font-size: 18px; letter-spacing: 3px; margin-bottom: 14px; }
-    .keys { display: grid; grid-template-columns: 120px 1fr; gap: 8px 14px; font-size: 14px; }
-    .keys kbd { font-family: inherit; color: var(--accent); }
-    .tips { margin-top: 16px; font-size: 13px; color: #9a9a92; line-height: 1.7; }
-    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0; font-size: 14px; }
-    .row input[type=range] { width: 200px; pointer-events: auto; accent-color: var(--accent); }
-    .row select, .row input[type=checkbox] { pointer-events: auto; background: #111; color: var(--text); border: 1px solid #444; padding: 4px 6px; font: inherit; accent-color: var(--accent); }
-    .stats { margin-top: 18px; color: #aaa; font-size: 15px; line-height: 1.9; }
-    #dead h1 { font-size: clamp(40px, 7vw, 80px); color: var(--red); letter-spacing: 6px; text-shadow: 0 0 20px rgba(255,0,0,.6); }
-    #win { background: #f2f2ee; color: #1a1a1a; transition: background 2s; }
-    #win h1 { font-size: clamp(40px, 7vw, 80px); letter-spacing: 10px; }
-    #win .stats { color: #444; }
-    #win .btn { color: #222; background: rgba(255,255,255,.6); border-color: #999; }
-    #win .after { margin-top: 26px; font-size: 14px; color: #7a1010; opacity: 0; transition: opacity 2s; letter-spacing: 2px; }
-    #win .after.on { opacity: 1; }
     #scare { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; z-index: 50; }
     #scare.on { display: flex; }
     #scare img { width: min(90vw, 90vh); filter: grayscale(.85) contrast(1.4) brightness(.9); }
-    #clickhint { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); padding: 12px 20px; background: var(--panel); border: 1px solid #444; display: none; font-size: 15px; }
+    #clickhint { position: fixed; z-index: 25; left: 50%; top: 50%; transform: translate(-50%,-50%); padding: 12px 20px; background: var(--panel); border: 1px solid #444; display: none; font-size: 15px; }
     #clickhint.on { display: block; }
-    .screen { z-index: 20; }
-    #note { z-index: 15; }
-    html, body { touch-action: none; overscroll-behavior: none; }
+    #crack { position: fixed; inset: 0; z-index: 30; display: none; pointer-events: none; width: 100%; height: 100%; }
+    #crack.on { display: block; }
+    #crack path { stroke: rgba(255,255,255,.9); stroke-width: 2.5; fill: none; vector-effect: non-scaling-stroke; stroke-dasharray: 300; stroke-dashoffset: 300; animation: crack .45s forwards; filter: drop-shadow(0 0 2px #000); }
+    #crack path:nth-child(n+4) { animation-delay: .5s; }
+    #crack path:nth-child(n+7) { animation-delay: 1s; }
+    @keyframes crack { to { stroke-dashoffset: 0; } }
+    #cctv { position: fixed; inset: 0; z-index: 8; display: none; pointer-events: none; font-family: var(--mono); color: #cfe8d0; text-shadow: 0 0 4px #000; }
+    #cctv.on { display: block; }
+    #cctv .rec { position: absolute; top: 18px; left: 22px; color: #ff3b3b; font-size: 18px; animation: blink 1s steps(2) infinite; }
+    #cctv .cam { position: absolute; top: 18px; right: 22px; font-size: 16px; letter-spacing: 2px; }
+    #cctv .time { position: absolute; bottom: 18px; right: 22px; font-size: 16px; }
+    #cctv .hint { position: absolute; bottom: 18px; left: 22px; font-size: 12px; opacity: .7; }
+    #cctv::after { content: ''; position: absolute; inset: 12px; border: 2px solid rgba(200,255,210,.25); }
+    #toast { position: fixed; top: 18px; right: 18px; z-index: 70; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+    #toast div { display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; background: rgba(10,10,10,.94); border: 1px solid #2c2c2c; border-left: 3px solid var(--blood); color: #e0dccf; font-size: 13px; letter-spacing: .05em; animation: toastIn .4s ease both; transition: opacity .6s, transform .6s; }
+    #toast div::before { content: '◆'; color: #e0313a; font-size: 14px; }
+    #toast div.out { opacity: 0; transform: translateX(20px); }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+    .version { position: fixed; right: 14px; bottom: 8px; font-size: 10px; color: #3d3b37; letter-spacing: .2em; z-index: 22; }
 
     /* ---------- 모바일 터치 조작 ---------- */
     #touch { position: fixed; inset: 0; z-index: 5; display: none; touch-action: none; }
@@ -110,7 +264,7 @@
     #touch .stick.on { display: block; }
     #touch .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.28); transform: translate(-50%, -50%); }
     #touch .zone-hint { position: absolute; left: 6vw; bottom: 9vh; font-size: 12px; color: rgba(255,255,255,.25); pointer-events: none; }
-    #touch .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); color: rgba(255,255,255,.75); font: inherit; font-size: 13px; letter-spacing: 1px; touch-action: none; -webkit-tap-highlight-color: transparent; }
+    #touch .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); color: rgba(255,255,255,.75); touch-action: none; -webkit-tap-highlight-color: transparent; }
     #touch .tbtn.down { background: rgba(255,255,255,.2); }
     #touch .tbtn.active { border-color: var(--accent); color: var(--accent); }
     #touch .tbtn svg { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -122,85 +276,70 @@
     #touch [data-touch=pause] { right: calc(12px + env(safe-area-inset-right)); top: 10px; width: 36px; height: 36px; border-radius: 8px; }
     body.touch #hud { z-index: 6; }
     body.touch #floor { top: 12px; left: calc(16px + env(safe-area-inset-left)); }
-    body.touch #floor .num { font-size: 30px; }
-    body.touch #floor .goal { font-size: 12px; }
-    body.touch #meters { top: 74px; bottom: auto; left: calc(16px + env(safe-area-inset-left)); width: 170px; }
-    body.touch #detector { top: 12px; bottom: auto; right: calc(70px + env(safe-area-inset-right)); width: 150px; padding: 6px 8px; }
-    body.touch #dbars { height: 26px; }
-    body.touch #msg { bottom: 30%; font-size: 15px; }
-    body.touch #warn { font-size: 40px; }
-    body.touch #prompt { font-size: 14px; }
-    body.touch .menu { margin-top: 20px; gap: 8px; }
-    body.touch .btn { padding: 10px 16px; font-size: 15px; }
-    body.touch h1.title { font-size: clamp(30px, 7vw, 64px); }
+    body.touch #floor .num { font-size: 28px; }
+    body.touch #meters { top: 86px; bottom: auto; left: calc(16px + env(safe-area-inset-left)); width: 160px; }
+    body.touch #detector { top: 12px; bottom: auto; right: calc(60px + env(safe-area-inset-right)); width: 150px; padding: 6px 8px; }
+    body.touch #dbars { height: 24px; }
+    body.touch #msg { bottom: 30%; }
     .touch-only { display: none; }
     body.touch .touch-only { display: block; }
     body.touch .keys.touch-only { display: grid; }
     body.touch .pc-only { display: none; }
-    #pause.breaking { animation: breakShake .07s infinite; background: rgba(40,0,0,.65); }
-    #pause.breaking h1 { color: #ff2b2b !important; text-shadow: 5px 0 rgba(0,255,255,.6), -5px 0 rgba(255,0,0,.9) !important; animation: none; }
-    #pause.breaking .menu { animation: menuFall 1.5s ease-in forwards; }
-    @keyframes breakShake {
-      0% { transform: translate(0,0); } 25% { transform: translate(-9px,4px) skewX(3deg); }
-      50% { transform: translate(7px,-5px); } 75% { transform: translate(-4px,-3px) skewX(-5deg); }
+
+    @media (max-width: 1100px) {
+      #newgame .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dcard { min-height: 0; }
+      #ach-list { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, auto); }
     }
-    @keyframes menuFall {
-      0% { transform: none; opacity: 1; } 55% { transform: translateY(14px) rotate(-4deg); opacity: .9; }
-      100% { transform: translateY(110vh) rotate(28deg); opacity: 0; }
+    @media (max-height: 600px) {
+      .screen-head { padding-top: 3vh; }
+      #title .logo { margin-bottom: 2vh; }
+      .mi { padding-top: 5px; padding-bottom: 5px; }
+      .dcard { padding: 12px 14px; }
+      .dcard p { margin-top: 6px; font-size: 12px; }
+      .panel { margin-top: 2vh; padding: 14px 18px; }
     }
-    #crack { position: fixed; inset: 0; z-index: 30; display: none; pointer-events: none; width: 100%; height: 100%; }
-    #crack.on { display: block; }
-    #crack path { stroke: rgba(255,255,255,.9); stroke-width: 2.5; fill: none; vector-effect: non-scaling-stroke; stroke-dasharray: 300; stroke-dashoffset: 300; animation: crack .45s forwards; filter: drop-shadow(0 0 2px #000); }
-    #crack path:nth-child(n+4) { animation-delay: .5s; }
-    #crack path:nth-child(n+7) { animation-delay: 1s; }
-    @keyframes crack { to { stroke-dashoffset: 0; } }
-    #clickhint { z-index: 25; }
-    .diffs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .btn.locked { opacity: .45; }
-    .menu { width: min(380px, 86vw); }
-    #ach-list { display: grid; gap: 8px; }
-    .ach { padding: 9px 12px; border: 1px solid #2a2a2a; background: rgba(255,255,255,.02); opacity: .55; }
-    .ach.ok { opacity: 1; border-color: #4a6a4e; }
-    .ach b { display: block; font-size: 14px; letter-spacing: 1px; }
-    .ach.ok b::before { content: '✔ '; color: var(--accent); }
-    .ach span { font-size: 12px; color: #9a9a92; }
-    #cctv { position: fixed; inset: 0; z-index: 8; display: none; pointer-events: none; font-family: "Courier New", monospace; color: #cfe8d0; text-shadow: 0 0 4px #000; }
-    #cctv.on { display: block; }
-    #cctv .rec { position: absolute; top: 18px; left: 22px; color: #ff3b3b; font-size: 18px; animation: blink 1s steps(2) infinite; }
-    #cctv .cam { position: absolute; top: 18px; right: 22px; font-size: 16px; letter-spacing: 2px; }
-    #cctv .time { position: absolute; bottom: 18px; right: 22px; font-size: 16px; }
-    #cctv .hint { position: absolute; bottom: 18px; left: 22px; font-size: 12px; opacity: .7; }
-    #cctv::after { content: ''; position: absolute; inset: 12px; border: 2px solid rgba(200,255,210,.25); }
-    #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
-    #toast div { padding: 9px 16px; background: rgba(10,14,10,.92); border: 1px solid #4a6a4e; color: #d8f0da; font-size: 14px; letter-spacing: 1px; transition: opacity .6s, transform .6s; }
-    #toast div.out { opacity: 0; transform: translateY(-8px); }
-    .screen { overflow-y: auto; touch-action: pan-y; }
-    @media (max-height: 560px) {
-      .screen { justify-content: flex-start; padding-top: 14px; padding-bottom: 14px; }
-      .screen > * { flex-shrink: 0; }
-      h1.title { font-size: 34px !important; letter-spacing: 4px; }
-      .subtitle { margin-top: 4px; font-size: 12px; }
-      .menu { margin-top: 12px !important; gap: 6px !important; }
-      .btn { padding: 7px 12px !important; font-size: 14px !important; }
-      .btn small { font-size: 10px; margin-top: 1px; }
-      .panel { margin-top: 6px; padding: 16px 18px; max-height: none; }
-      #dead h1, #win h1 { font-size: 36px; }
-      .stats { margin-top: 8px; font-size: 13px; line-height: 1.6; }
-    }
-    .version { position: fixed; right: 12px; bottom: 8px; font-size: 11px; color: #444; }
   </style>
 </head>
-<body>
+<body class="menu-on">
   <div id="app"></div>
+  <div class="grain"></div>
+
+  <!-- 부팅: 주의 문구 -->
+  <div id="boot" class="on">
+    <div class="warn-box">
+      <div class="warn-icon">!</div>
+      <h2>주 의</h2>
+      <p>이 게임에는 갑작스러운 큰 소리, 깜빡이는 빛, 놀라게 하는 장면이 포함되어 있습니다.<br />
+        광과민성 발작 위험이 있거나 심장이 약한 분은 플레이에 주의하십시오.<br /><br />
+        이어폰 또는 헤드폰 착용을 권장합니다.</p>
+    </div>
+    <div class="skip">클릭하여 건너뛰기</div>
+  </div>
+
+  <!-- 로딩 -->
+  <div id="loading">
+    <div class="ld-logo"><div class="en">SONGSIN STAIRWELL</div><div class="ko">공포의 송신계단</div></div>
+    <div class="ld-tip"><b>TIP</b><span id="ld-tip-text"></span></div>
+    <div class="ld-row"><span id="ld-step">불러오는 중</span><span id="ld-pct">0%</span></div>
+    <div class="ld-bar"><div class="ld-fill" id="ld-fill"></div></div>
+  </div>
+
+  <!-- 시작 대기 -->
+  <div id="press">
+    <div class="logo"><div class="en">SONGSIN STAIRWELL</div><h1>공포의 송신계단</h1><div class="line"></div></div>
+    <div class="press-key">아무 키나 누르거나 클릭하세요</div>
+  </div>
 
   <div id="hud">
-    <div id="floor"><div class="num">1F</div><div class="goal">목표: 20F 옥상</div></div>
+    <div id="floor"><div class="lbl">FLOOR</div><div class="num">1F</div><div class="goal">목표: 20F 옥상</div></div>
     <div id="meters">
-      <div class="meter" id="stamina"><div class="lbl"><span>체력</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
-      <div class="meter" id="battery"><div class="lbl"><span>손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" id="stamina"><div class="lbl"><span>STAMINA · 체력</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" id="battery"><div class="lbl"><span>LIGHT · 손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
     </div>
     <div id="detector">
-      <div class="head"><span>송신 수신기</span><b>신호 없음</b></div>
+      <div class="head"><span>SIGNAL 송신</span><b>신호 없음</b></div>
       <div id="dbars"></div>
     </div>
     <div id="cross"></div>
@@ -212,26 +351,72 @@
   <div id="note"><div class="paper"><h3></h3><p></p><div class="close">[E] 또는 클릭하여 닫기</div></div></div>
   <div id="clickhint">화면을 클릭하면 마우스 조작이 다시 잡힙니다</div>
 
-  <section id="title" class="screen on">
-    <h1 class="title">공포의 송신계단</h1>
-    <div class="subtitle">20층 옥상까지 살아서 올라가라</div>
-    <div class="subtitle touch-only" style="font-size:12px;margin-top:6px">가로 화면 · 이어폰 권장</div>
-    <div class="menu">
-      <div class="diffs">
-        <button class="btn" data-act="start" data-diff="casual">캐주얼<small>처음이라면</small></button>
-        <button class="btn" data-act="start" data-diff="normal">노말<small>권장</small></button>
-        <button class="btn danger" data-act="start" data-diff="hard">하드<small>빠르고 집요하다</small></button>
-        <button class="btn danger nm" data-act="start" data-diff="nightmare">악몽<small>🔒 하드 클리어 시 해금</small></button>
-      </div>
-      <button class="btn" data-act="howto">조작법 · 생존 수칙</button>
-      <button class="btn" data-act="achievements">도전과제</button>
-      <button class="btn" data-act="settings">설정</button>
+  <!-- 메인 메뉴 -->
+  <section id="title" class="screen shade-left">
+    <div class="logo">
+      <div class="en">SONGSIN STAIRWELL</div>
+      <h1>공포의 송신계단</h1>
+      <div class="line"></div>
+      <div class="tag">꼭대기 층까지, 살아서.</div>
+    </div>
+    <nav class="menu">
+      <button class="mi" data-act="newgame" data-nav>새 게임</button>
+      <button class="mi" data-act="achievements" data-nav>도전과제 <em id="ach-mini"></em></button>
+      <button class="mi" data-act="howto" data-nav>조작법 · 생존 수칙</button>
+      <button class="mi" data-act="settings" data-nav>설정</button>
+    </nav>
+    <div class="title-foot">
+      <span class="pc-only"><kbd>↑</kbd><kbd>↓</kbd> 선택 · <kbd>Enter</kbd> 확인 · <kbd>Esc</kbd> 뒤로</span>
+      <span>이어폰 권장</span>
     </div>
   </section>
 
+  <!-- 난이도 선택 -->
+  <section id="newgame" class="screen dim">
+    <div class="screen-head"><div class="en">SELECT DIFFICULTY</div><h2>난이도 선택</h2><div class="line"></div></div>
+    <div class="cards">
+      <button class="dcard" data-act="start" data-diff="casual" data-nav>
+        <div class="badge">CLEAR</div>
+        <div class="lv">LEVEL 01</div><h3>캐주얼</h3><div class="floors">20층</div>
+        <p>송신이 느리고 쉽게 포기한다. 숨을 시간도 넉넉하다. 처음이라면 여기서.</p>
+        <div class="stat">송신 속도<i style="--v:30%"></i></div>
+        <div class="stat">집요함<i style="--v:25%"></i></div>
+        <div class="stat">어둠<i style="--v:30%"></i></div>
+      </button>
+      <button class="dcard" data-act="start" data-diff="normal" data-nav>
+        <div class="badge">CLEAR</div>
+        <div class="lv">LEVEL 02</div><h3>노말</h3><div class="floors">20층 · 권장</div>
+        <p>의도한 공포. 송신은 당신이 있는 층 근처로 자주 내려온다.</p>
+        <div class="stat">송신 속도<i style="--v:55%"></i></div>
+        <div class="stat">집요함<i style="--v:50%"></i></div>
+        <div class="stat">어둠<i style="--v:55%"></i></div>
+      </button>
+      <button class="dcard" data-act="start" data-diff="hard" data-nav>
+        <div class="badge">CLEAR</div>
+        <div class="lv">LEVEL 03</div><h3>하드</h3><div class="floors">20층</div>
+        <p>빠르고 집요하다. 손전등 배터리는 금방 닳고, 숨을 수 있는 시간은 짧다.</p>
+        <div class="stat">송신 속도<i style="--v:75%"></i></div>
+        <div class="stat">집요함<i style="--v:75%"></i></div>
+        <div class="stat">어둠<i style="--v:75%"></i></div>
+      </button>
+      <button class="dcard nightmare" data-act="start" data-diff="nightmare" data-nav>
+        <div class="badge">CLEAR</div>
+        <div class="lv">LEVEL ??</div><h3>악몽</h3><div class="floors">30층</div>
+        <p>표시기를 믿을 수 없다. 꼭대기에 가까워질수록 송신은 거의 달리는 속도로 쫓아온다.</p>
+        <div class="stat">송신 속도<i style="--v:95%"></i></div>
+        <div class="stat">집요함<i style="--v:100%"></i></div>
+        <div class="stat">어둠<i style="--v:95%"></i></div>
+        <div class="lock"><b>🔒</b>하드 모드를 클리어하면<br />열립니다</div>
+      </button>
+    </div>
+    <div class="back-row"><button class="mi" data-act="back" data-nav>뒤로</button></div>
+    <div class="screen-foot pc-only"><span><kbd>←</kbd><kbd>→</kbd>선택</span><span><kbd>Enter</kbd>시작</span><span><kbd>Esc</kbd>뒤로</span></div>
+  </section>
+
   <section id="howto" class="screen dim">
+    <div class="screen-head"><div class="en">HOW TO SURVIVE</div><h2>조작법 · 생존 수칙</h2><div class="line"></div></div>
     <div class="panel">
-      <h2>조작법</h2>
+      <h4>조작</h4>
       <div class="keys touch-only" style="margin-bottom:14px">
         <kbd>왼쪽 화면</kbd><span>가상 조이스틱으로 이동 (끝까지 밀면 달리기)</span>
         <kbd>오른쪽 화면</kbd><span>손가락으로 끌어 시점 회전</span>
@@ -243,72 +428,81 @@
         <kbd>Shift</kbd><span>달리기 (체력 소모)</span>
         <kbd>C / Ctrl</kbd><span>웅크리기 (조용히 이동)</span>
         <kbd>마우스 좌클릭</kbd><span>손전등 켜기/끄기 (F 키도 가능)</span>
-        <kbd>E</kbd><span>줍기 · 읽기 · 문 열기</span>
+        <kbd>E</kbd><span>줍기 · 읽기 · 비상문 여닫기 · CCTV</span>
         <kbd>Esc</kbd><span>일시정지</span>
       </div>
-      <div class="tips">
-        · <b>목표</b>: 꼭대기 층(악몽은 30층) 옥상 문까지 올라가 탈출한다.<br />
-        · <b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 당신 쪽으로 걸어온다. 위층에서 내려오기도 한다.<br />
-        · 엘리베이터 표시기에 층수가 뜨면 송신은 엘리베이터 안에 있다. <b>Err</b>가 뜨면 계단 어딘가에 있다.<br />
-        · <b>비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>[E]로 문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.<br />
-        · 비상실 복도 벽의 <b>CCTV 모니터</b>로 문 앞 계단참을 볼 수 있다. 송신이 떠났는지 확인하고 나가라.<br />
-        · 같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.<br />
-        · 일시정지 화면 뒤에 너무 오래 숨지 마라.<br />
-        · 송신은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가 멀리 퍼지고, 손전등 빛도 눈에 띈다.<br />
-        · 오른쪽 아래 수신기가 지직거릴수록 송신이 가까이 있다.<br />
-        · 엘리베이터는 송신만 탈 수 있다.
-      </div>
-      <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
+      <h4>생존 수칙</h4>
+      <ul class="tips">
+        <li><b>목표</b> — 꼭대기 층(악몽은 30층) 옥상 문을 열고 탈출한다.</li>
+        <li><b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 당신 쪽으로 걸어온다. 위층에서 내려오기도 한다.</li>
+        <li>엘리베이터 표시기에 층수가 뜨면 송신은 엘리베이터 안, <b>Err</b>가 뜨면 계단 어딘가에 있다.</li>
+        <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.</li>
+        <li>비상실 안쪽 벽의 <b>CCTV 모니터</b>로 문 앞을 확인할 수 있다.</li>
+        <li>같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.</li>
+        <li>송신은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가, 손전등은 빛이 눈에 띈다.</li>
+        <li>체력이 바닥난 채로 달리면 넘어진다. 오른쪽 아래 수신기가 지직거릴수록 송신이 가깝다.</li>
+        <li>일시정지 뒤에 너무 오래 숨지 마라.</li>
+      </ul>
     </div>
+    <div class="back-row"><button class="mi" data-act="back" data-nav>뒤로</button></div>
   </section>
 
   <section id="settings" class="screen dim">
+    <div class="screen-head"><div class="en">OPTIONS</div><h2>설정</h2><div class="line"></div></div>
     <div class="panel">
-      <h2>설정</h2>
-      <div class="row"><span>마우스 감도</span><input type="range" id="set-sens" min="0.3" max="3" step="0.05" /></div>
-      <div class="row"><span>음량</span><input type="range" id="set-vol" min="0" max="1" step="0.01" /></div>
-      <div class="row"><span>밝기(감마) <small id="gamma-val" style="color:var(--sub)">1.00</small></span><input type="range" id="set-gamma" min="0.8" max="1.6" step="0.05" /></div>
+      <h4>화면</h4>
+      <div class="row"><span>밝기 (감마)<span class="val" id="gamma-val">1.00</span></span><input type="range" id="set-gamma" min="0.8" max="1.6" step="0.05" /></div>
       <div class="row"><span>그래픽 품질</span>
         <select id="set-q"><option value="low">낮음</option><option value="mid">보통</option><option value="high">높음</option><option value="ultra">울트라</option></select></div>
+      <h4>소리</h4>
+      <div class="row"><span>음량</span><input type="range" id="set-vol" min="0" max="1" step="0.01" /></div>
       <div class="row"><span>음성 연출 (브라우저 TTS)</span><input type="checkbox" id="set-voice" /></div>
+      <h4>조작</h4>
+      <div class="row"><span>마우스 감도</span><input type="range" id="set-sens" min="0.3" max="3" step="0.05" /></div>
       <div class="row"><span>마우스 Y축 반전</span><input type="checkbox" id="set-invert" /></div>
-      <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
+      <div class="row"><span>안내 문구 (처음 한 번만 표시)</span><button class="small-btn" data-act="reset-hints">다시 보기</button></div>
     </div>
+    <div class="back-row"><button class="mi" data-act="back" data-nav>뒤로</button></div>
   </section>
 
   <section id="achievements" class="screen dim">
+    <div class="screen-head"><div class="en">ACHIEVEMENTS</div><h2>도전과제</h2><div class="line"></div></div>
     <div class="panel">
-      <h2>도전과제 <small id="ach-count" style="color:var(--sub);font-size:13px"></small></h2>
+      <div class="ach-head"><h4 style="margin:0">달성</h4><span id="ach-count" style="font-family:var(--mono);color:#8d897f;font-size:13px"></span></div>
+      <div class="ach-prog"><i id="ach-bar" style="width:0"></i></div>
       <div id="ach-list"></div>
-      <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
     </div>
+    <div class="back-row"><button class="mi" data-act="back" data-nav>뒤로</button></div>
   </section>
 
-  <section id="pause" class="screen dim">
-    <h1 class="title" style="font-size:48px">일시정지</h1>
-    <div class="menu">
-      <button class="btn" data-act="resume">계속하기</button>
-      <button class="btn" data-act="howto">조작법</button>
-      <button class="btn" data-act="settings">설정</button>
-      <button class="btn danger" data-act="quit">타이틀로</button>
-    </div>
+  <section id="pause" class="screen shade-left">
+    <div class="p-head"><div class="en">PAUSED</div><h2>일시정지</h2></div>
+    <div class="p-info" id="pause-info"></div>
+    <nav class="menu">
+      <button class="mi" data-act="resume" data-nav>계속하기</button>
+      <button class="mi" data-act="howto" data-nav>조작법</button>
+      <button class="mi" data-act="settings" data-nav>설정</button>
+      <button class="mi danger" data-act="quit" data-nav>타이틀로</button>
+    </nav>
   </section>
 
-  <section id="dead" class="screen dim">
-    <h1>송신에게 잡혔다</h1>
+  <section id="dead" class="screen">
+    <div class="big">송신에게 잡혔다</div>
+    <div class="sub" id="dead-sub">계단은 아직 끝나지 않았다</div>
     <div class="stats"></div>
-    <div class="menu">
-      <button class="btn" data-act="retry">다시 하기</button>
-      <button class="btn" data-act="quit">타이틀로</button>
+    <div class="end-menu">
+      <button class="mi" data-act="retry" data-nav>다시 하기</button>
+      <button class="mi" data-act="quit" data-nav>타이틀로</button>
     </div>
   </section>
 
   <section id="win" class="screen">
-    <h1>탈 출</h1>
+    <div class="big">탈 출</div>
+    <div class="sub">옥상의 바람이 차갑다</div>
     <div class="stats"></div>
-    <div class="menu">
-      <button class="btn" data-act="retry">다시 하기</button>
-      <button class="btn" data-act="quit">타이틀로</button>
+    <div class="end-menu">
+      <button class="mi" data-act="retry" data-nav>다시 하기</button>
+      <button class="mi" data-act="quit" data-nav>타이틀로</button>
     </div>
     <div class="after">…송신은 아직 계단에 있다.</div>
   </section>
@@ -341,7 +535,7 @@
     <button class="tbtn" data-touch="torch" aria-label="손전등"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l-1.5 6h-5zM9.5 9h5v11a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1zM12 13v2"/></svg></button>
     <button class="tbtn" data-touch="pause" aria-label="일시정지"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg></button>
   </div>
-  <div class="version">v1.0</div>
+  <div class="version">v1.2</div>
 
   <script type="module" src="./main.js"></script>
 </body>

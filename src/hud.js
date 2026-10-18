@@ -34,6 +34,7 @@ export class Hud {
 
   screen(id) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   }
 
   setFloor(text) {
@@ -126,8 +127,9 @@ export class Hud {
     }
   }
 
-  stats(id, lines) {
-    $(`#${id} .stats`).innerHTML = lines.join('<br />');
+  /** 결과 화면 통계: [[이름, 값, 강조?], ...] */
+  stats(id, rows) {
+    $(`#${id} .stats`).innerHTML = rows.map(([k, v, hl]) => `<div class="st ${hl ? 'hl' : ''}"><span>${k}</span><b>${v}</b></div>`).join('');
   }
 }
 
