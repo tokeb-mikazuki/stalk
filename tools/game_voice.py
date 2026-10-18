@@ -1,4 +1,4 @@
-"""게임 안내 방송 음성 생성: TTS_CA=<CA 번들> python3 tools/game_voice.py
+"""게임 안내 방송 음성 생성: TTS_CA=<CA 번들> python3 tools/game_voice.py [id ...]  (id 를 주면 그것만 다시 만든다)
 트레일러와 같은 신경망 음성(ko-KR-SunHiNeural)으로 src/voice.js 의 안내 문구를 읽어
 assets/voice/*.mp3 (모노 24kHz, 작은 용량)로 저장한다. 네트워크가 필요하다.
 """
@@ -25,7 +25,10 @@ def lines():
 
 async def main():
     os.makedirs(OUT, exist_ok=True)
+    only = set(sys.argv[1:])
     for vid, say, rate, pitch in lines():
+        if only and vid not in only:
+            continue
         tmp = os.path.join(OUT, f'{vid}.tmp.mp3')
         await tts.edge_tts.Communicate(say, tts.VOICE, rate=rate, pitch=pitch).save(tmp)
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', tmp, '-ac', '1', '-ar', '24000', '-b:a', '40k',

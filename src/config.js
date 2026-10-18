@@ -244,6 +244,7 @@ export const DIFFICULTY = {
   },
   nightmare: {
     label: '악몽',
+    keyRequired: true, // 옥상 문 열쇠 (엘리베이터 안 또는 25~30층 열린 비상실)
     ai: { hear: 62, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2, calm: 12 },
     floors: 30,
     chaseSpeed: 4.8,

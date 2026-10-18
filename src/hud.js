@@ -45,8 +45,8 @@ export class Hud {
   }
 
   /** 현재 층은 알려주지 않는다 (벽에 칠해진 층 번호로만 알 수 있음) */
-  setGoal(left) {
-    const t = left <= 0 ? '목표: 옥상 문을 열고 탈출' : '목표: 옥상 문으로 탈출';
+  setGoal(left, needKey = false) {
+    const t = needKey ? '목표: 열쇠를 찾아 옥상 문으로' : left <= 0 ? '목표: 옥상 문을 열고 탈출' : '목표: 옥상 문으로 탈출';
     if (t !== this.lastGoal) {
       this.lastGoal = t;
       this.goalEl.textContent = t;

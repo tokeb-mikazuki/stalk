@@ -45,7 +45,7 @@ export class DebugPanel {
       <h4>이동</h4>
       <div class="row">층 <input type="number" id="dbg-floor" min="1" value="1"> <button class="b" data-dbg="go">이동</button>
         <button class="b" data-dbg="top">꼭대기</button></div>
-      <div class="row"><button class="b" data-dbg="win">즉시 탈출 (엔딩)</button></div>
+      <div class="row"><button class="b" data-dbg="win">즉시 탈출 (엔딩)</button><button class="b" data-dbg="key">열쇠 얻기</button></div>
       <h4>송신</h4>
       <label><input type="checkbox" data-opt="god"> 무적 (잡히지 않음)</label>
       <label><input type="checkbox" data-opt="freeze"> 송신 정지 (AI 멈춤)</label>
@@ -137,6 +137,9 @@ export class DebugPanel {
       case 'win':
         if (playing) g.win();
         break;
+      case 'key':
+        g.hasKey = true;
+        break;
       case 'hunt':
         if (playing) g.triggerHunt('hide');
         break;
@@ -217,6 +220,7 @@ export class DebugPanel {
       `송신     ${s.state} @ ${s.inElevator ? `E${el.floor.toFixed(1)}` : `${s.floor + 1}F`}  ${s.visible ? '보임' : '안 보임'}`,
       `         사냥 ${s.hunting ? 'O' : '-'}  문부수기 ${s.burst ? 'O' : '-'}  관심없음 ${s.calmT.toFixed(0)}s`,
       `         짐작 ${b && b.t < 1e8 ? `${Math.round(b.phi / (Math.PI * 4)) + 1}F 근처, ${b.t.toFixed(1)}s 전` : '없음'}`,
+      `열쇠     ${g.diff?.keyRequired ? (g.hasKey ? '가짐' : `없음 (${g.keyWhere === 'car' ? '엘리베이터 안' : `${g.keyWhere + 1}F 비상실`})`) : '필요 없음'}`,
       `엘리베이터 ${el.floor.toFixed(1)}  문 ${el.doorK >= 0 ? el.doorK + 1 + 'F 열림' : '닫힘'}  탑승 ${el.occupant || '-'}`,
     ].join('\n');
   }

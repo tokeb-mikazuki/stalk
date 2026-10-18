@@ -537,6 +537,7 @@ class Game {
     this.audio.titleMusic(false);
     this.leaveEnding();
     this.huntFloor = null;
+    this.hasKey = false;
     this.diffKey = diffKey;
     this.diff = DIFFICULTY[diffKey];
     this.ensureWorld(this.diff.floors);
@@ -583,6 +584,7 @@ class Game {
     this.director.after(1.5, () => this.hint('intro-goal'));
     this.director.after(9.5, () => this.hint('intro-elevator'));
     this.director.after(17.5, () => this.hint('intro-door'));
+    if (this.diff.keyRequired) this.director.after(this.hints.has('intro-door') ? 3 : 25, () => this.say('key-intro'));
   }
 
   pause() {
@@ -648,7 +650,7 @@ class Game {
 
   // ------------------------------------------------------------------ 아이템
   clearItems() {
-    for (const it of this.items) this.scene.remove(it.mesh);
+    for (const it of this.items) it.mesh.parent?.remove(it.mesh);
     this.items = [];
   }
 
@@ -674,6 +676,71 @@ class Game {
     for (const d of this.world.fireDoors) {
       if (!d.locked && Math.random() < this.diff.roomBatteries) this.addItem('battery', fireDoorPhi(d.k), 0, d.tablePos);
     }
+    if (this.diff.keyRequired) this.placeKey();
+  }
+
+  /** 악몽: 옥상 문 열쇠 — 엘리베이터 칸 안쪽 구석, 또는 25~30층 열린 비상실 중 한 곳의 모니터 책상 위 */
+  placeKey() {
+    const doors = this.world.fireDoors;
+    const lo = Math.max(1, FLOORS - 6);
+    let rooms = doors.filter((d) => !d.locked && d.k >= lo);
+    if (!rooms.length) {
+      const d = doors[lo + Math.floor(Math.random() * (FLOORS - lo))];
+      d.locked = false;
+      d.exitSign.material = this.world.doorMats.exitOn;
+      if (d.lamp.baseKind !== undefined) d.lamp.kind = d.lamp.baseKind;
+      rooms = [d];
+    }
+    if (Math.random() < 0.5) {
+      // 엘리베이터 칸 안, 뒤쪽 구석 바닥 — 깊숙이 들어가야 손이 닿는다
+      const mesh = this.makeKeyMesh();
+      const local = new THREE.Vector3(0.48, 0.02, -1.3);
+      mesh.position.copy(local);
+      this.world.car.group.add(mesh);
+      this.items.push({ type: 'key', mesh, car: true, local, pos: new THREE.Vector3(), glow: mesh.userData.glow, seed: 1 });
+      this.keyWhere = 'car';
+    } else {
+      const d = rooms[Math.floor(Math.random() * rooms.length)];
+      // 그 책상의 배터리는 치우고 열쇠를 둔다
+      const bat = this.items.find((it) => it.type === 'battery' && it.mesh.position.distanceTo(d.tablePos) < 0.05);
+      if (bat) {
+        this.scene.remove(bat.mesh);
+        this.items.splice(this.items.indexOf(bat), 1);
+      }
+      const mesh = this.makeKeyMesh();
+      mesh.position.copy(d.tablePos);
+      this.scene.add(mesh);
+      this.items.push({ type: 'key', mesh, pos: d.tablePos.clone().setY(d.tablePos.y + 0.1), glow: mesh.userData.glow, seed: 2 });
+      this.keyWhere = d.k;
+    }
+  }
+
+  /** 낡은 황동 열쇠 + 희미한 반짝임 */
+  makeKeyMesh() {
+    const g = new THREE.Group();
+    const brass = new THREE.MeshStandardMaterial({ color: 0xb8914a, roughness: 0.3, metalness: 0.9, emissive: 0x2a1c08 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.006, 8, 18), brass);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(-0.045, 0.006, 0);
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.008, 0.008), brass);
+    shaft.position.set(0.012, 0.006, 0);
+    const bit = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.008, 0.022), brass);
+    bit.position.set(0.04, 0.006, 0.012);
+    const tag = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.004, 0.05), new THREE.MeshStandardMaterial({ color: 0x8a1c1c, roughness: 0.8 }));
+    tag.position.set(-0.085, 0.004, 0.01);
+    tag.rotation.y = 0.4;
+    g.add(ring, shaft, bit, tag);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this.world.tex.glow, color: 0xffd69a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    glow.scale.setScalar(0.45);
+    glow.position.y = 0.04;
+    g.add(glow);
+    g.userData.glow = glow;
+    g.scale.setScalar(1.5); // 어두운 바닥에서도 눈에 띄게
+    g.traverse((o) => { o.castShadow = o.isMesh; });
+    return g;
   }
 
   /** at: 지정 위치(비상실 책상 위 등). 없으면 계단참 phi 위 */
@@ -729,7 +796,15 @@ class Game {
       const score = dot - d * 0.1;
       if (score > bestScore) { bestScore = score; best = data; }
     };
-    for (const it of this.items) consider(it.pos, 2.1, { kind: 'item', it });
+    for (const it of this.items) {
+      if (it.car) {
+        // 칸 안의 열쇠: 칸이 이 층에 서 있을 때만, 그리고 안으로 들어가야 닿는다
+        if (Math.abs(this.elevator.floor - this.player.floor) > 0.05) continue;
+        it.pos.copy(it.local).setY(0.05);
+        this.world.car.group.localToWorld(it.pos);
+        consider(it.pos, 1.85, { kind: 'item', it });
+      } else consider(it.pos, 2.1, { kind: 'item', it });
+    }
     const k = this.player.floor;
     const fd = this.world.fireDoors[k];
     if (fd) consider(fd.pos, 2.2, { kind: 'firedoor', door: fd });
@@ -746,9 +821,9 @@ class Game {
 
   promptFor(t) {
     if (!t) return '';
-    if (t.kind === 'item') return { battery: '배터리 줍기', note: '쪽지 읽기' }[t.it.type];
+    if (t.kind === 'item') return { battery: '배터리 줍기', note: '쪽지 읽기', key: '열쇠 줍기' }[t.it.type];
     if (t.kind === 'firedoor') return t.door.locked ? '비상문 (잠김)' : t.door.target > 0 ? '비상문 닫기' : '비상문 열기';
-    if (t.kind === 'roof') return '옥상 문 열고 탈출하기';
+    if (t.kind === 'roof') return this.diff.keyRequired && !this.hasKey ? '옥상 문 (잠김 — 열쇠가 필요하다)' : '옥상 문 열고 탈출하기';
     if (t.kind === 'button') return '엘리베이터 호출';
     if (t.kind === 'carpanel') return '층 버튼 누르기';
     if (t.kind === 'cctv') return t.door.open > 0.3 ? 'CCTV 보기 (문이 열려 있다!)' : 'CCTV 보기 — 문 앞 확인';
@@ -769,9 +844,14 @@ class Game {
     const a = this.audio, p = this.player;
     if (t.kind === 'item') {
       const it = t.it;
-      this.scene.remove(it.mesh);
+      it.mesh.parent?.remove(it.mesh);
       this.items.splice(this.items.indexOf(it), 1);
-      if (it.type === 'battery') {
+      if (it.type === 'key') {
+        this.hasKey = true;
+        a.pickup();
+        a.click(0.5);
+        this.hud.msg(it.car ? '열쇠를 얻었다 — 문이 닫히기 전에 나가라' : '옥상 열쇠를 얻었다', 2.6, it.car ? 'alert' : undefined);
+      } else if (it.type === 'battery') {
         p.battery = Math.min(100, p.battery + 45);
         a.pickup();
         this.hud.msg('배터리 +45%', 1.8);
@@ -798,6 +878,11 @@ class Game {
         a.creak(d.pos, true);
       }
     } else if (t.kind === 'roof') {
+      if (this.diff.keyRequired && !this.hasKey) {
+        a.rattle(this.world.roof.pos);
+        this.hud.msg('잠겨 있다 — 열쇠가 필요하다', 2.4);
+        return;
+      }
       this.win();
     } else if (t.kind === 'cctv') {
       this.openCctv(t.door);
@@ -1534,7 +1619,7 @@ class Game {
     // ---- HUD ----
     const fl = p.floor;
     this.hud.setFloor(p.inCar ? `${fl + 1}F 엘리베이터` : p.inRoom ? `${fl + 1}F 비상실` : onLanding(p.phi) || fl >= FLOORS - 1 ? `${fl + 1}F` : `${fl + 1}F ↗ ${fl + 2}F`);
-    this.hud.setGoal(FLOORS - 1 - fl, FLOORS);
+    this.hud.setGoal(FLOORS - 1 - fl, this.diff.keyRequired && !this.hasKey);
     this.hud.setStamina(p.stamina, p.exhausted);
     this.hud.setBattery(p.battery);
     this.hud.setDetector(s.inElevator ? prox * 0.6 : prox);
