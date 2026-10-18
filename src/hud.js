@@ -5,7 +5,9 @@ export class Hud {
   constructor() {
     this.el = $('#hud');
     this.floorNum = $('#floor .num');
-    this.keyEl = $('#inv .key');
+    this.goalEl = $('#floor .goal');
+    this.riskEl = $('#risk');
+    this.riskFill = $('#risk .fill');
     this.stFill = $('#stamina .fill');
     this.btFill = $('#battery .fill');
     this.btVal = $('#battery .v');
@@ -43,8 +45,20 @@ export class Hud {
     }
   }
 
-  setKey(on) {
-    this.keyEl.classList.toggle('on', on);
+  setGoal(left, total) {
+    const t = left <= 0 ? '목표: 옥상 문을 열고 탈출!' : `목표: ${total}F 옥상 탈출 · ${left}층 남음`;
+    if (t !== this.lastGoal) {
+      this.lastGoal = t;
+      this.goalEl.textContent = t;
+    }
+  }
+
+  /** 같은 층 체류 위험도 (원작의 HIDE_THRESH 시각화) */
+  setRisk(ratio, inRoom) {
+    const show = inRoom || ratio > 0.4;
+    this.riskEl.classList.toggle('on', show);
+    this.riskFill.style.width = `${Math.min(100, ratio * 100)}%`;
+    this.riskEl.classList.toggle('hot', ratio > 0.72);
   }
 
   setStamina(v, exhausted) {
@@ -75,7 +89,7 @@ export class Hud {
   setPrompt(text) {
     if (text === this.lastPrompt) return;
     this.lastPrompt = text;
-    if (text) this.prompt.innerHTML = `<kbd>E</kbd>${text}`;
+    if (text) this.prompt.innerHTML = `<kbd>${this.keyLabel || 'E'}</kbd>${text}`;
     this.prompt.classList.toggle('on', !!text);
   }
 
@@ -90,6 +104,15 @@ export class Hud {
     this.warnEl.classList.remove('on');
     void this.warnEl.offsetWidth;
     this.warnEl.classList.add('on');
+  }
+
+  toast(text) {
+    const el = document.getElementById('toast');
+    const item = document.createElement('div');
+    item.textContent = text;
+    el.appendChild(item);
+    setTimeout(() => item.classList.add('out'), 3600);
+    setTimeout(() => item.remove(), 4300);
   }
 
   showNote(title, body) {

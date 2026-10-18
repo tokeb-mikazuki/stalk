@@ -45,36 +45,42 @@ function speckle(ctx, w, h, r, n, light) {
 
 /** 참고 이미지 상단의 흰 정사각 타일 벽 */
 export function tileTexture() {
-  const [c, ctx] = canvas(512, 512);
+  const S = 1024;
+  const [c, ctx] = canvas(S, S);
   const r = rng(7);
-  ctx.fillStyle = '#77756f';
-  ctx.fillRect(0, 0, 512, 512);
-  const T = 64;
-  for (let y = 0; y < 512; y += T) {
-    for (let x = 0; x < 512; x += T) {
+  ctx.fillStyle = '#6f6d67';
+  ctx.fillRect(0, 0, S, S);
+  const T = 128;
+  for (let y = 0; y < S; y += T) {
+    for (let x = 0; x < S; x += T) {
       const v = 196 + Math.floor(r() * 26);
-      ctx.fillStyle = `rgb(${v},${v - 2},${v - 6})`;
-      ctx.fillRect(x + 2, y + 2, T - 4, T - 4);
+      // 타일 가장자리를 살짝 둥글게 (노멀맵에서 볼록하게 보임)
+      const g = ctx.createRadialGradient(x + T / 2, y + T / 2, T * 0.2, x + T / 2, y + T / 2, T * 0.75);
+      g.addColorStop(0, `rgb(${v},${v - 2},${v - 6})`);
+      g.addColorStop(1, `rgb(${v - 18},${v - 20},${v - 24})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(x + 4, y + 4, T - 8, T - 8);
       if (r() < 0.12) { // 깨진 타일
         ctx.strokeStyle = 'rgba(40,40,40,0.6)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        let px = x + r() * T, py = y + 2;
+        let px = x + r() * T, py = y + 4;
         ctx.moveTo(px, py);
-        for (let i = 0; i < 4; i++) { px += (r() - 0.5) * 30; py += T / 4; ctx.lineTo(px, py); }
+        for (let i = 0; i < 6; i++) { px += (r() - 0.5) * 40; py += T / 6; ctx.lineTo(px, py); }
         ctx.stroke();
       }
     }
   }
-  grime(ctx, 512, 512, r, 40, 0.35);
+  speckle(ctx, S, S, r, 6000, false);
+  grime(ctx, S, S, r, 80, 0.35);
   // 아래로 흐른 얼룩
-  for (let i = 0; i < 14; i++) {
-    const x = r() * 512, len = 60 + r() * 300;
+  for (let i = 0; i < 28; i++) {
+    const x = r() * S, len = 120 + r() * 600;
     const g = ctx.createLinearGradient(0, 0, 0, len);
     g.addColorStop(0, 'rgba(30,25,20,0.25)');
     g.addColorStop(1, 'rgba(30,25,20,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(x, r() * 200, 2 + r() * 5, len);
+    ctx.fillRect(x, r() * 400, 3 + r() * 8, len);
   }
   return toTexture(c);
 }
@@ -193,9 +199,9 @@ export function fireDoorTexture() {
   ctx.fillStyle = '#7a1010';
   ctx.font = 'bold 28px "Malgun Gothic", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('출입금지', 128, 152);
+  ctx.fillText('비 상 문', 128, 152);
   ctx.font = '16px "Malgun Gothic", sans-serif';
-  ctx.fillText('관계자 외', 128, 178);
+  ctx.fillText('항상 닫아 두십시오', 128, 178);
   return toTexture(c, false);
 }
 
@@ -307,4 +313,113 @@ export function glowTexture() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 64, 64);
   return toTexture(c, false);
+}
+
+/** 비상구 표시등 (열 수 있는 방 = 켜짐, 잠긴 방 = 꺼짐) */
+export function exitSignTexture(on) {
+  const [c, ctx] = canvas(256, 100);
+  ctx.fillStyle = on ? '#0f7a3a' : '#122018';
+  ctx.fillRect(0, 0, 256, 100);
+  ctx.strokeStyle = on ? '#bfffd0' : '#2a3a30';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(4, 4, 248, 92);
+  ctx.fillStyle = on ? '#eafff0' : '#2c3a32';
+  // 달리는 사람
+  ctx.beginPath();
+  ctx.arc(46, 28, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(42, 40); ctx.lineTo(36, 62); ctx.lineTo(22, 80);
+  ctx.moveTo(36, 62); ctx.lineTo(54, 72); ctx.lineTo(58, 88);
+  ctx.moveTo(42, 46); ctx.lineTo(62, 54);
+  ctx.moveTo(42, 46); ctx.lineTo(26, 52);
+  ctx.stroke();
+  ctx.font = 'bold 44px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('비상구', 160, 52);
+  return toTexture(c, false);
+}
+
+/** 송신의 뒷모습: 원본 실루엣을 머리카락 색으로 채움 */
+export function silhouetteTexture(image) {
+  const [c, ctx] = canvas(image.width, image.height);
+  ctx.drawImage(image, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  const g = ctx.createLinearGradient(0, 0, 0, image.height);
+  g.addColorStop(0, '#0d0c0c');
+  g.addColorStop(0.7, '#141212');
+  g.addColorStop(1, '#2a221e');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, image.width, image.height);
+  // 머리카락 결
+  ctx.globalCompositeOperation = 'source-atop';
+  const r = rng(77);
+  for (let i = 0; i < 260; i++) {
+    const x = r() * image.width;
+    ctx.strokeStyle = `rgba(${40 + r() * 30},${36 + r() * 20},${34 + r() * 20},${0.25 + r() * 0.3})`;
+    ctx.lineWidth = 1 + r() * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, r() * image.height * 0.3);
+    ctx.quadraticCurveTo(x + (r() - 0.5) * 30, image.height * 0.4, x + (r() - 0.5) * 20, image.height * (0.5 + r() * 0.4));
+    ctx.stroke();
+  }
+  return toTexture(c, false);
+}
+
+/** 색 텍스처의 밝기를 높이로 보고 노멀맵 생성 (어두운 곳 = 움푹 들어감) */
+export function normalMapFrom(tex, strength = 2) {
+  const src = tex.image;
+  const w = src.width, h = src.height;
+  const sctx = src.getContext('2d');
+  const d = sctx.getImageData(0, 0, w, h).data;
+  const hgt = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) hgt[i] = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) / 255;
+  const [c, ctx] = canvas(w, h);
+  const out = ctx.createImageData(w, h);
+  const H = (x, y) => hgt[((y + h) % h) * w + ((x + w) % w)];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = (H(x + 1, y) - H(x - 1, y)) * strength;
+      const dy = (H(x, y + 1) - H(x, y - 1)) * strength;
+      const len = Math.hypot(dx, dy, 1);
+      const o = (y * w + x) * 4;
+      out.data[o] = (-dx / len * 0.5 + 0.5) * 255;
+      out.data[o + 1] = (dy / len * 0.5 + 0.5) * 255;
+      out.data[o + 2] = (1 / len * 0.5 + 0.5) * 255;
+      out.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = tex.wrapS;
+  t.wrapT = tex.wrapT;
+  t.repeat.copy(tex.repeat);
+  t.anisotropy = tex.anisotropy;
+  return t;
+}
+
+/** 밝은 곳은 매끈하게(광택), 어두운 곳은 거칠게 — 타일 광택 표현용 */
+export function roughnessMapFrom(tex, smooth = 0.25, rough = 0.95) {
+  const src = tex.image;
+  const w = src.width, h = src.height;
+  const d = src.getContext('2d').getImageData(0, 0, w, h).data;
+  const [c, ctx] = canvas(w, h);
+  const out = ctx.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    const l = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 765;
+    const v = (rough + (smooth - rough) * Math.min(1, Math.max(0, (l - 0.35) / 0.45))) * 255;
+    out.data[i * 4] = out.data[i * 4 + 1] = out.data[i * 4 + 2] = v;
+    out.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = tex.wrapS;
+  t.wrapT = tex.wrapT;
+  return t;
 }

@@ -1,13 +1,13 @@
 // 1인칭 플레이어: WASD 이동(시점 기준), 마우스 시점, 달리기/웅크리기/손전등
 import * as THREE from 'three';
 import {
-  TAU, R_MID, PHI_MIN, PHI_MAX, PLAYER_R_MIN, PLAYER_R_MAX, EYE, EYE_CROUCH,
-  floorIndex, stepTopY, onLanding,
+  TAU, FLOOR_PHI, LANDING, R_MID, PHI_MIN, PHI_MAX, PLAYER_R_MIN, PLAYER_R_MAX, EYE, EYE_CROUCH,
+  floorIndex, stepTopY, onLanding, toRoomLocal, fromRoomLocal, inRoomArea,
 } from './config.js';
 
 const WALK = 2.9, SPRINT = 5.4, CROUCH = 1.4;
 const STAMINA_DRAIN = 21, STAMINA_REGEN = 14;
-const TRIP_TIME = 1.7;
+const TRIP_TIME = 3.4; // 넘어져서 다시 일어나기까지
 
 function wrapPi(a) {
   a = (a + Math.PI) % TAU;
@@ -33,7 +33,8 @@ export class Player {
     camera.add(this.torch, this.torch.target);
 
     // 아주 약한 주변광 (손전등을 꺼도 윤곽은 보이게)
-    this.glow = new THREE.PointLight(0x8090a0, 0.18, 4, 2);
+    // 손전등을 꺼도 바로 눈앞 정도만 겨우 보이게 하는 아주 약한 빛
+    this.glow = new THREE.PointLight(0x8090a0, 0.18, 2.2, 2);
     camera.add(this.glow);
 
     this.buildViewModel();
@@ -103,6 +104,11 @@ export class Player {
     this.swayY = 0;
     this.shake = 0;
     this.frozen = false;
+    this.roomK = -1; // 숨을 방 안에 있으면 그 층 번호
+  }
+
+  get inRoom() {
+    return this.roomK >= 0;
   }
 
   get floor() {
@@ -123,6 +129,21 @@ export class Player {
     return true;
   }
 
+  trip(ev) {
+    this.tripT = TRIP_TIME;
+    this.tripSide = Math.random() < 0.5 ? -1 : 1;
+    this.tripImpact = false;
+    this.sprintTime = 0;
+    this.stamina = Math.max(0, this.stamina - 40);
+    this.exhausted = true;
+    this.staminaDelay = 1.5;
+    this.vx *= 0.15;
+    this.vz *= 0.15;
+    this.shake = Math.max(this.shake, 1.2);
+    this.addNoise(26);
+    ev.trip = true;
+  }
+
   addNoise(radius) {
     this.noiseSpike = Math.max(this.noiseSpike, radius);
   }
@@ -131,7 +152,7 @@ export class Player {
    * input: {f,b,l,r,sprint,crouch}
    * 반환: { footstep: 볼륨|0, trip: bool }
    */
-  update(dt, input, diff) {
+  update(dt, input, diff, doors = []) {
     const ev = { footstep: 0, trip: false };
     const tripping = this.tripT > 0;
     if (tripping) this.tripT = Math.max(0, this.tripT - dt);
@@ -139,14 +160,17 @@ export class Player {
     // ----- 입력 → 원하는 속도 -----
     let mz = 0, mx = 0;
     if (!this.frozen && !tripping) {
-      mz = (input.f ? 1 : 0) - (input.b ? 1 : 0);
-      mx = (input.r ? 1 : 0) - (input.l ? 1 : 0);
+      // 키보드 + (모바일) 가상 조이스틱 아날로그 입력
+      mz = (input.f ? 1 : 0) - (input.b ? 1 : 0) + (input.axisY || 0);
+      mx = (input.r ? 1 : 0) - (input.l ? 1 : 0) + (input.axisX || 0);
     }
-    const moving = mz !== 0 || mx !== 0;
+    const mag = Math.min(1, Math.hypot(mx, mz));
+    const moving = mag > 0.12;
     this.crouching = !!input.crouch && !tripping;
-    const wantSprint = input.sprint && moving && mz > 0 && !this.crouching && !this.exhausted && this.stamina > 0;
+    const stickRun = (input.axisY || 0) > 0 && Math.hypot(input.axisX || 0, input.axisY || 0) > 0.93;
+    const wantSprint = (input.sprint || stickRun) && moving && mz > 0 && !this.crouching && !this.exhausted && this.stamina > 0;
     this.sprinting = wantSprint;
-    const speed = this.crouching ? CROUCH : wantSprint ? SPRINT : WALK;
+    const speed = (this.crouching ? CROUCH : wantSprint ? SPRINT : WALK) * (moving ? Math.max(0.35, mag) : 0);
 
     let tx = 0, tz = 0;
     if (moving) {
@@ -163,18 +187,8 @@ export class Player {
     this.vz += (tz - this.vz) * a;
 
     // ----- 나선 계단 위로 이동 (phi, r 로 충돌 처리) -----
-    const nx = this.x + this.vx * dt;
-    const nz = this.z + this.vz * dt;
-    const dphi = wrapPi(Math.atan2(nz, nx) - this.phi);
-    let phi = this.phi + dphi;
-    let r = Math.hypot(nx, nz);
-    r = Math.max(PLAYER_R_MIN, Math.min(PLAYER_R_MAX, r));
-    phi = Math.max(PHI_MIN, Math.min(PHI_MAX, phi));
     const ox = this.x, oz = this.z;
-    this.phi = phi;
-    this.r = r;
-    this.x = r * Math.cos(phi);
-    this.z = r * Math.sin(phi);
+    this.moveTo(this.x + this.vx * dt, this.z + this.vz * dt, doors);
     this.speed = Math.hypot(this.x - ox, this.z - oz) / Math.max(dt, 1e-4);
 
     // ----- 스태미나 -----
@@ -193,19 +207,13 @@ export class Player {
     // ----- 넘어짐 (원작: 5층 이상에서 오래 오르면 확률적으로 넘어짐) -----
     if (this.sprinting && this.speed > 3 && this.floor >= 4 && !onLanding(this.phi)) {
       this.sprintTime += dt;
-      if (this.sprintTime > 2.5 && Math.random() < diff.tripChance * dt) {
-        this.tripT = TRIP_TIME;
-        this.sprintTime = 0;
-        this.stamina = Math.max(0, this.stamina - 40);
-        this.exhausted = true;
-        this.vx *= 0.2;
-        this.vz *= 0.2;
-        this.addNoise(26);
-        ev.trip = true;
-      }
+      if (this.sprintTime > 2.5 && Math.random() < diff.tripChance * dt) this.trip(ev);
     } else {
       this.sprintTime = Math.max(0, this.sprintTime - dt * 2);
     }
+    // 체력이 바닥난 채로 달리려 하면 다리가 꼬인다
+    const tryRun = (input.sprint || stickRun) && moving && mz > 0 && !this.crouching;
+    if (tryRun && this.exhausted && !tripping && Math.random() < diff.exhaustTripChance * dt) this.trip(ev);
 
     // ----- 소음 반경 (송신의 청각) -----
     let base = 0;
@@ -244,6 +252,75 @@ export class Player {
     return ev;
   }
 
+  /** 계단(원환) + 비상문 너머 방을 오가는 충돌 처리 */
+  moveTo(nx, nz, doors) {
+    if (this.roomK >= 0) {
+      const d = doors[this.roomK];
+      const passable = d && d.open > 0.7;
+      const ok = (lx, lz) => inRoomArea(lx, lz) && (passable || lz < -0.32);
+      const c = toRoomLocal(nx, nz);
+      // 문을 지나 계단참으로 나감
+      if (c.lz > 0.35 && passable && Math.hypot(nx, nz) <= PLAYER_R_MAX + 0.02) {
+        this.roomK = -1;
+        this.moveTo(nx, nz, doors);
+        return;
+      }
+      const o = toRoomLocal(this.x, this.z);
+      let lx = o.lx, lz = o.lz;
+      if (ok(c.lx, c.lz)) { lx = c.lx; lz = c.lz; }
+      else if (ok(c.lx, o.lz)) lx = c.lx;
+      else if (ok(o.lx, c.lz)) lz = c.lz;
+      const w = fromRoomLocal(lx, lz);
+      this.setRoomPos(w.x, w.z);
+      return;
+    }
+
+    const dphi = wrapPi(Math.atan2(nz, nx) - this.phi);
+    let phi = this.phi + dphi;
+    let r = Math.hypot(nx, nz);
+    // 열린 비상문으로 들어감 (문 쪽으로 살짝 빨아들여 들어가기 쉽게)
+    const k = floorIndex(phi);
+    const door = doors[k];
+    if (door && door.open > 0.7 && onLanding(phi) && r > PLAYER_R_MAX) {
+      const c = toRoomLocal(nx, nz);
+      if (Math.abs(c.lx) < 0.55) {
+        c.lx = Math.max(-0.21, Math.min(0.21, c.lx));
+        if (inRoomArea(c.lx, c.lz)) {
+          this.roomK = k;
+          const w = fromRoomLocal(c.lx, c.lz);
+          this.setRoomPos(w.x, w.z);
+          return;
+        }
+      }
+    }
+    r = Math.max(PLAYER_R_MIN, Math.min(PLAYER_R_MAX, r));
+    phi = Math.max(PHI_MIN, Math.min(PHI_MAX, phi));
+    this.phi = phi;
+    this.r = r;
+    this.x = r * Math.cos(phi);
+    this.z = r * Math.sin(phi);
+  }
+
+  setRoomPos(x, z) {
+    const k = this.roomK;
+    const phi = this.phi + wrapPi(Math.atan2(z, x) - this.phi);
+    // 방 안에서는 그 층 계단참에 있는 것으로 취급 (층 판정·바닥 높이)
+    this.phi = Math.max(k * FLOOR_PHI + 0.01, Math.min(k * FLOOR_PHI + LANDING - 0.01, phi));
+    this.x = x;
+    this.z = z;
+    this.r = Math.hypot(x, z);
+  }
+
+  /** 문이 닫힐 때 문짝 자리에 서 있으면 방 안쪽으로 밀어냄 */
+  pushOutOfDoorway() {
+    if (this.roomK < 0) return;
+    const c = toRoomLocal(this.x, this.z);
+    if (c.lz > -0.35) {
+      const w = fromRoomLocal(c.lx, -0.35);
+      this.setRoomPos(w.x, w.z);
+    }
+  }
+
   updateCamera(dt) {
     // 발 높이: 계단을 오를 때는 빠르게, 내려갈 때는 떨어지듯
     const target = stepTopY(this.phi);
@@ -258,15 +335,26 @@ export class Player {
     const bobY = Math.sin(this.bob * 2) * 0.045 * sp * (this.sprinting ? 1.4 : 1);
     const bobX = Math.cos(this.bob) * 0.03 * sp;
 
-    // 넘어짐 연출
-    let drop = 0, roll = 0, pitchOff = 0;
+    // 넘어짐 연출: 확 고꾸라짐 → 바닥에 쓰러져 있음 → 비틀거리며 천천히 일어남
+    let drop = 0, roll = 0, pitchOff = 0, down = 0;
     if (this.tripT > 0) {
       const p = 1 - this.tripT / TRIP_TIME;
-      const k = p < 0.18 ? p / 0.18 : p < 0.65 ? 1 : 1 - (p - 0.65) / 0.35;
-      const e = k * k * (3 - 2 * k);
-      drop = -1.05 * e;
-      roll = 0.55 * e;
-      pitchOff = -0.6 * e;
+      let e;
+      if (p < 0.09) e = (p / 0.09) ** 2;
+      else if (p < 0.5) e = 1;
+      else {
+        const q = (p - 0.5) / 0.5;
+        e = 1 - q * q * (3 - 2 * q);
+      }
+      if (p >= 0.09 && !this.tripImpact) {
+        this.tripImpact = true; // 바닥에 부딪힌 순간
+        this.shake = Math.max(this.shake, 1.5);
+      }
+      const side = this.tripSide || 1;
+      down = e;
+      drop = -(this.eye - 0.28) * e;
+      roll = side * (1.05 * e + (p > 0.5 ? Math.sin(p * 40) * 0.07 * e : 0));
+      pitchOff = -0.75 * e + (p > 0.09 && p < 0.5 ? Math.sin(p * 9) * 0.04 : 0);
     }
 
     this.shake = Math.max(0, this.shake - dt * 1.5);
@@ -292,7 +380,7 @@ export class Player {
     const lower = this.sprinting ? 0.08 : 0;
     vm.position.set(
       this.vmBase.x + bobX * 0.6 - this.swayX,
-      this.vmBase.y + bobY * 0.5 - lower - this.swayY - (this.tripT > 0 ? 0.3 : 0),
+      this.vmBase.y + bobY * 0.5 - lower - this.swayY - down * 0.45,
       this.vmBase.z,
     );
     vm.rotation.set(this.sprinting ? -0.35 : 0, this.sprinting ? 0.3 : 0, 0);
@@ -300,6 +388,6 @@ export class Player {
     const on = this.torchOn;
     const batt = Math.min(1, 0.35 + this.battery / 60);
     this.torch.intensity = on ? 22 * batt * this.torchFlicker : 0;
-    this.lensMat.color.setScalar(on ? 0.6 + 0.4 * this.torchFlicker : 0.08);
+    this.lensMat.color.setScalar(on ? 2.8 * this.torchFlicker : 0.08); // 블룸으로 빛남
   }
 }

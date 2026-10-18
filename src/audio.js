@@ -299,7 +299,7 @@ export class AudioEngine {
 
     // 송신 목소리
     if (s.voicePos) this.setPos(this.voicePanner, s.voicePos.x, s.voicePos.y, s.voicePos.z);
-    let target = s.voiceOn ? (s.chasing ? 1.0 : 0.45) : 0;
+    let target = s.voiceOn ? (s.chasing ? 1.0 : 0.45) * (s.muffled ? 0.4 : 1) : 0;
     this.laughT -= dt;
     if (s.voiceOn && this.laughT <= 0) {
       // 주기적으로 웃음 폭발
@@ -609,8 +609,11 @@ export class AudioEngine {
     o.stop(t + dur + 0.1);
   }
 
-  rattle() {
+  /** 문고리 덜컹 (pos 가 있으면 그 위치에서) */
+  rattle(pos = null) {
     const ctx = this.ctx, t = ctx.currentTime;
+    const dest = pos ? this.panner(pos.x, pos.y, pos.z, 2.5, 1) : null;
+    if (dest) this.out(dest, 0.4);
     for (let i = 0; i < 4; i++) {
       const n = this.noiseSrc();
       const bp = ctx.createBiquadFilter();
@@ -620,9 +623,60 @@ export class AudioEngine {
       const g = ctx.createGain();
       this.env(g, t + i * 0.09, 0.002, 0.45, 0.07);
       n.connect(bp).connect(g);
-      this.out(g, 0.4);
+      if (dest) g.connect(dest);
+      else this.out(g, 0.4);
       n.start(t + i * 0.09, Math.random(), 0.1);
     }
+  }
+
+  /** 비상문 삐걱 (open: 여는 소리 / 닫는 소리) */
+  creak(pos, open = true) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const p = this.panner(pos.x, pos.y, pos.z, 2.5, 1);
+    this.out(p, 0.5);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    const f0 = open ? 180 : 260, f1 = open ? 320 : 140;
+    o.frequency.setValueAtTime(f0, t);
+    for (let k = 0.04; k < 0.6; k += 0.04) o.frequency.linearRampToValueAtTime(f0 + (f1 - f0) * (k / 0.6) + (Math.random() - 0.5) * 40, t + k);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
+    o.connect(bp).connect(g).connect(p);
+    o.start(t);
+    o.stop(t + 0.7);
+    if (!open) {
+      // 닫히는 쿵
+      const o2 = ctx.createOscillator();
+      o2.frequency.setValueAtTime(90, t + 0.5);
+      o2.frequency.exponentialRampToValueAtTime(40, t + 0.7);
+      const g2 = ctx.createGain();
+      this.env(g2, t + 0.5, 0.005, 0.5, 0.2);
+      o2.connect(g2).connect(p);
+      o2.start(t + 0.5);
+      o2.stop(t + 0.8);
+    }
+  }
+
+  /** 문을 부수듯 열어젖힘 */
+  slam(pos) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const p = this.panner(pos.x, pos.y, pos.z, 4, 0.8);
+    this.out(p, 0.7);
+    const n = this.noiseSrc();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1400;
+    const g = ctx.createGain();
+    this.env(g, t, 0.002, 1.0, 0.35);
+    n.connect(lp).connect(g).connect(p);
+    n.start(t, Math.random(), 0.5);
+    this.boom(0.8);
   }
 
   pickup(key = false) {

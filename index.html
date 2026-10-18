@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
   <title>공포의 송신계단</title>
   <style>
     :root {
@@ -24,10 +24,13 @@
     #floor { position: absolute; top: 22px; left: 26px; }
     #floor .num { font-size: 44px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,0,0,.9); }
     #floor .goal { font-size: 13px; color: var(--sub); letter-spacing: 1px; }
-    #inv { position: absolute; top: 26px; right: 26px; display: flex; gap: 10px; align-items: center; }
-    #inv .key { display: none; padding: 6px 10px; border: 1px solid #b89a4a; color: #e8cf86; font-size: 13px; background: var(--panel); }
-    #inv .key.on { display: block; }
-    #meters { position: absolute; left: 26px; bottom: 26px; width: 220px; }
+    #floor .goal { font-size: 14px; color: #a9a9a0; }
+    #risk { display: none; }
+    #risk.on { display: block; }
+    #risk .fill { background: #b9a26a; }
+    #risk.hot .fill { background: var(--red); animation: blink .5s infinite; }
+    @keyframes blink { 50% { opacity: .35; } }
+    #meters { position: absolute; left: 26px; bottom: 26px; width: 260px; }
     .meter { margin-top: 8px; }
     .meter .lbl { font-size: 11px; color: var(--sub); letter-spacing: 1px; display: flex; justify-content: space-between; }
     .meter .bar { height: 5px; background: rgba(255,255,255,.1); margin-top: 3px; }
@@ -100,8 +103,93 @@
     #scare img { width: min(90vw, 90vh); filter: grayscale(.85) contrast(1.4) brightness(.9); }
     #clickhint { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); padding: 12px 20px; background: var(--panel); border: 1px solid #444; display: none; font-size: 15px; }
     #clickhint.on { display: block; }
-    #mobile { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; padding: 30px; text-align: center; line-height: 1.8; z-index: 100; }
-    #mobile.on { display: flex; }
+    .screen { z-index: 20; }
+    #note { z-index: 15; }
+    html, body { touch-action: none; overscroll-behavior: none; }
+
+    /* ---------- 모바일 터치 조작 ---------- */
+    #touch { position: fixed; inset: 0; z-index: 5; display: none; touch-action: none; }
+    #touch.on { display: block; }
+    #touch .stick { position: absolute; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 2px solid rgba(255,255,255,.22); background: rgba(255,255,255,.05); display: none; pointer-events: none; }
+    #touch .stick.on { display: block; }
+    #touch .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.28); transform: translate(-50%, -50%); }
+    #touch .zone-hint { position: absolute; left: 6vw; bottom: 9vh; font-size: 12px; color: rgba(255,255,255,.25); pointer-events: none; }
+    #touch .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); color: rgba(255,255,255,.75); font: inherit; font-size: 13px; letter-spacing: 1px; touch-action: none; -webkit-tap-highlight-color: transparent; }
+    #touch .tbtn.down { background: rgba(255,255,255,.2); }
+    #touch .tbtn.active { border-color: var(--accent); color: var(--accent); }
+    #touch [data-touch=use] { right: calc(26px + env(safe-area-inset-right)); bottom: 30px; width: 84px; height: 84px; font-size: 16px; }
+    #touch [data-touch=use].ready { border-color: var(--accent); color: #fff; box-shadow: 0 0 14px rgba(67,255,89,.45); }
+    #touch [data-touch=run] { right: calc(124px + env(safe-area-inset-right)); bottom: 24px; width: 66px; height: 66px; }
+    #touch [data-touch=crouch] { right: calc(120px + env(safe-area-inset-right)); bottom: 104px; width: 58px; height: 58px; }
+    #touch [data-touch=torch] { right: calc(40px + env(safe-area-inset-right)); bottom: 128px; width: 58px; height: 58px; }
+    #touch [data-touch=pause] { right: calc(14px + env(safe-area-inset-right)); top: 12px; width: 44px; height: 44px; border-radius: 8px; font-size: 16px; }
+    body.touch #hud { z-index: 6; }
+    body.touch #floor { top: 12px; left: calc(16px + env(safe-area-inset-left)); }
+    body.touch #floor .num { font-size: 30px; }
+    body.touch #floor .goal { font-size: 12px; }
+    body.touch #meters { top: 74px; bottom: auto; left: calc(16px + env(safe-area-inset-left)); width: 170px; }
+    body.touch #detector { top: 12px; bottom: auto; right: calc(70px + env(safe-area-inset-right)); width: 150px; padding: 6px 8px; }
+    body.touch #dbars { height: 26px; }
+    body.touch #msg { bottom: 30%; font-size: 15px; }
+    body.touch #warn { font-size: 40px; }
+    body.touch #prompt { font-size: 14px; }
+    body.touch .menu { margin-top: 20px; gap: 8px; }
+    body.touch .btn { padding: 10px 16px; font-size: 15px; }
+    body.touch h1.title { font-size: clamp(30px, 7vw, 64px); }
+    .touch-only { display: none; }
+    body.touch .touch-only { display: block; }
+    body.touch .keys.touch-only { display: grid; }
+    body.touch .pc-only { display: none; }
+    #pause.breaking { animation: breakShake .07s infinite; background: rgba(40,0,0,.65); }
+    #pause.breaking h1 { color: #ff2b2b !important; text-shadow: 5px 0 rgba(0,255,255,.6), -5px 0 rgba(255,0,0,.9) !important; animation: none; }
+    #pause.breaking .menu { animation: menuFall 1.5s ease-in forwards; }
+    @keyframes breakShake {
+      0% { transform: translate(0,0); } 25% { transform: translate(-9px,4px) skewX(3deg); }
+      50% { transform: translate(7px,-5px); } 75% { transform: translate(-4px,-3px) skewX(-5deg); }
+    }
+    @keyframes menuFall {
+      0% { transform: none; opacity: 1; } 55% { transform: translateY(14px) rotate(-4deg); opacity: .9; }
+      100% { transform: translateY(110vh) rotate(28deg); opacity: 0; }
+    }
+    #crack { position: fixed; inset: 0; z-index: 30; display: none; pointer-events: none; width: 100%; height: 100%; }
+    #crack.on { display: block; }
+    #crack path { stroke: rgba(255,255,255,.9); stroke-width: 2.5; fill: none; vector-effect: non-scaling-stroke; stroke-dasharray: 300; stroke-dashoffset: 300; animation: crack .45s forwards; filter: drop-shadow(0 0 2px #000); }
+    #crack path:nth-child(n+4) { animation-delay: .5s; }
+    #crack path:nth-child(n+7) { animation-delay: 1s; }
+    @keyframes crack { to { stroke-dashoffset: 0; } }
+    #clickhint { z-index: 25; }
+    .diffs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn.locked { opacity: .45; }
+    .menu { width: min(380px, 86vw); }
+    #ach-list { display: grid; gap: 8px; }
+    .ach { padding: 9px 12px; border: 1px solid #2a2a2a; background: rgba(255,255,255,.02); opacity: .55; }
+    .ach.ok { opacity: 1; border-color: #4a6a4e; }
+    .ach b { display: block; font-size: 14px; letter-spacing: 1px; }
+    .ach.ok b::before { content: '✔ '; color: var(--accent); }
+    .ach span { font-size: 12px; color: #9a9a92; }
+    #cctv { position: fixed; inset: 0; z-index: 8; display: none; pointer-events: none; font-family: "Courier New", monospace; color: #cfe8d0; text-shadow: 0 0 4px #000; }
+    #cctv.on { display: block; }
+    #cctv .rec { position: absolute; top: 18px; left: 22px; color: #ff3b3b; font-size: 18px; animation: blink 1s steps(2) infinite; }
+    #cctv .cam { position: absolute; top: 18px; right: 22px; font-size: 16px; letter-spacing: 2px; }
+    #cctv .time { position: absolute; bottom: 18px; right: 22px; font-size: 16px; }
+    #cctv .hint { position: absolute; bottom: 18px; left: 22px; font-size: 12px; opacity: .7; }
+    #cctv::after { content: ''; position: absolute; inset: 12px; border: 2px solid rgba(200,255,210,.25); }
+    #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+    #toast div { padding: 9px 16px; background: rgba(10,14,10,.92); border: 1px solid #4a6a4e; color: #d8f0da; font-size: 14px; letter-spacing: 1px; transition: opacity .6s, transform .6s; }
+    #toast div.out { opacity: 0; transform: translateY(-8px); }
+    .screen { overflow-y: auto; touch-action: pan-y; }
+    @media (max-height: 560px) {
+      .screen { justify-content: flex-start; padding-top: 14px; padding-bottom: 14px; }
+      .screen > * { flex-shrink: 0; }
+      h1.title { font-size: 34px !important; letter-spacing: 4px; }
+      .subtitle { margin-top: 4px; font-size: 12px; }
+      .menu { margin-top: 12px !important; gap: 6px !important; }
+      .btn { padding: 7px 12px !important; font-size: 14px !important; }
+      .btn small { font-size: 10px; margin-top: 1px; }
+      .panel { margin-top: 6px; padding: 16px 18px; max-height: none; }
+      #dead h1, #win h1 { font-size: 36px; }
+      .stats { margin-top: 8px; font-size: 13px; line-height: 1.6; }
+    }
     .version { position: fixed; right: 12px; bottom: 8px; font-size: 11px; color: #444; }
   </style>
 </head>
@@ -110,8 +198,8 @@
 
   <div id="hud">
     <div id="floor"><div class="num">1F</div><div class="goal">목표: 20F 옥상</div></div>
-    <div id="inv"><div class="key">🗝 옥상 열쇠</div></div>
     <div id="meters">
+      <div class="meter" id="risk"><div class="lbl"><span>발각 위험 — 같은 층에 오래 머무는 중</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
       <div class="meter" id="stamina"><div class="lbl"><span>체력</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
       <div class="meter" id="battery"><div class="lbl"><span>손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
     </div>
@@ -126,15 +214,21 @@
   </div>
 
   <div id="note"><div class="paper"><h3></h3><p></p><div class="close">[E] 또는 클릭하여 닫기</div></div></div>
-  <div id="clickhint">화면을 클릭하면 계속합니다</div>
+  <div id="clickhint">화면을 클릭하면 마우스 조작이 다시 잡힙니다</div>
 
   <section id="title" class="screen on">
     <h1 class="title">공포의 송신계단</h1>
     <div class="subtitle">20층 옥상까지 살아서 올라가라</div>
+    <div class="subtitle touch-only" style="font-size:12px;margin-top:6px">가로 화면 · 이어폰 권장</div>
     <div class="menu">
-      <button class="btn" data-act="start-normal">시작하기<small>보통</small></button>
-      <button class="btn danger" data-act="start-nightmare">악몽 모드<small>더 빠르고, 더 집요하다</small></button>
+      <div class="diffs">
+        <button class="btn" data-act="start" data-diff="casual">캐주얼<small>처음이라면</small></button>
+        <button class="btn" data-act="start" data-diff="normal">노말<small>권장</small></button>
+        <button class="btn danger" data-act="start" data-diff="hard">하드<small>빠르고 집요하다</small></button>
+        <button class="btn danger nm" data-act="start" data-diff="nightmare">악몽<small>🔒 하드 클리어 시 해금</small></button>
+      </div>
       <button class="btn" data-act="howto">조작법 · 생존 수칙</button>
+      <button class="btn" data-act="achievements">도전과제</button>
       <button class="btn" data-act="settings">설정</button>
     </div>
   </section>
@@ -142,7 +236,12 @@
   <section id="howto" class="screen dim">
     <div class="panel">
       <h2>조작법</h2>
-      <div class="keys">
+      <div class="keys touch-only" style="margin-bottom:14px">
+        <kbd>왼쪽 화면</kbd><span>가상 조이스틱으로 이동 (끝까지 밀면 달리기)</span>
+        <kbd>오른쪽 화면</kbd><span>손가락으로 끌어 시점 회전</span>
+        <kbd>버튼</kbd><span>조사(줍기·문 여닫기) · 달리기 · 숙이기 · 손전등 · II 일시정지</span>
+      </div>
+      <div class="keys pc-only">
         <kbd>W A S D</kbd><span>앞 · 왼쪽 · 뒤 · 오른쪽 이동 (보는 방향 기준)</span>
         <kbd>마우스</kbd><span>시점 회전</span>
         <kbd>Shift</kbd><span>달리기 (체력 소모)</span>
@@ -152,12 +251,16 @@
         <kbd>Esc</kbd><span>일시정지</span>
       </div>
       <div class="tips">
-        · 엘리베이터 표시기에 층수가 뜨면 <b>송신</b>은 엘리베이터 안에 있다. <b>Err</b>가 뜨면 계단 어딘가에 있다.<br />
-        · 한 층에 너무 오래 머물면 송신이 찾아온다.<br />
-        · 달리면 발소리가 멀리 퍼지고, 손전등을 켜 두면 멀리서도 눈에 띈다.<br />
+        · <b>목표</b>: 꼭대기 층(악몽은 30층) 옥상 문까지 올라가 탈출한다.<br />
+        · <b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 당신 쪽으로 걸어온다. 위층에서 내려오기도 한다.<br />
+        · 엘리베이터 표시기에 층수가 뜨면 송신은 엘리베이터 안에 있다. <b>Err</b>가 뜨면 계단 어딘가에 있다.<br />
+        · <b>비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>[E]로 문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.<br />
+        · 비상실 복도 벽의 <b>CCTV 모니터</b>로 문 앞 계단참을 볼 수 있다. 송신이 떠났는지 확인하고 나가라.<br />
+        · 같은 층에 너무 오래 머물면(발각 위험 막대) 송신이 찾아와 문을 부수고 들어온다.<br />
+        · 일시정지 화면 뒤에 너무 오래 숨지 마라.<br />
+        · 송신은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가 멀리 퍼지고, 손전등 빛도 눈에 띈다.<br />
         · 오른쪽 아래 수신기가 지직거릴수록 송신이 가까이 있다.<br />
-        · 지친 상태로 계단을 뛰면 넘어질 수 있다.<br />
-        · 옥상 문은 열쇠로만 열린다.
+        · 엘리베이터는 송신만 탈 수 있다.
       </div>
       <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
     </div>
@@ -168,10 +271,19 @@
       <h2>설정</h2>
       <div class="row"><span>마우스 감도</span><input type="range" id="set-sens" min="0.3" max="3" step="0.05" /></div>
       <div class="row"><span>음량</span><input type="range" id="set-vol" min="0" max="1" step="0.01" /></div>
+      <div class="row"><span>밝기(감마) <small id="gamma-val" style="color:var(--sub)">1.00</small></span><input type="range" id="set-gamma" min="0.8" max="1.6" step="0.05" /></div>
       <div class="row"><span>그래픽 품질</span>
-        <select id="set-q"><option value="low">낮음</option><option value="mid">보통</option><option value="high">높음</option></select></div>
+        <select id="set-q"><option value="low">낮음</option><option value="mid">보통</option><option value="high">높음</option><option value="ultra">울트라</option></select></div>
       <div class="row"><span>음성 연출 (브라우저 TTS)</span><input type="checkbox" id="set-voice" /></div>
       <div class="row"><span>마우스 Y축 반전</span><input type="checkbox" id="set-invert" /></div>
+      <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
+    </div>
+  </section>
+
+  <section id="achievements" class="screen dim">
+    <div class="panel">
+      <h2>도전과제 <small id="ach-count" style="color:var(--sub);font-size:13px"></small></h2>
+      <div id="ach-list"></div>
       <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
     </div>
   </section>
@@ -205,8 +317,34 @@
     <div class="after">…송신은 아직 계단에 있다.</div>
   </section>
 
+  <svg id="crack" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M52 46 L58 38 L61 30 L68 22 L71 12 L78 0" />
+    <path d="M52 46 L44 40 L38 41 L30 33 L20 30 L8 22 L0 20" />
+    <path d="M52 46 L55 55 L52 63 L57 74 L55 86 L60 100" />
+    <path d="M52 46 L63 48 L72 45 L83 51 L92 49 L100 55" />
+    <path d="M52 46 L45 53 L37 56 L31 66 L20 72 L10 83 L0 86" />
+    <path d="M61 30 L66 33 L74 31" />
+    <path d="M38 41 L36 48 L28 52" />
+    <path d="M72 45 L76 38 L84 36 L90 28" />
+    <path d="M57 74 L64 79 L70 90 L73 100" />
+  </svg>
+  <div id="cctv">
+    <div class="rec">● REC</div>
+    <div class="cam" id="cctv-cam">CAM</div>
+    <div class="time" id="cctv-time"></div>
+    <div class="hint">[E] · 클릭 · 화면 터치 — CCTV 끄기</div>
+  </div>
+  <div id="toast"></div>
   <div id="scare"><img alt="" /></div>
-  <div id="mobile">이 게임은 PC(키보드 + 마우스) 전용입니다.<br />데스크톱 브라우저에서 실행해 주세요.</div>
+  <div id="touch">
+    <div class="zone-hint">← 왼쪽: 이동 · 오른쪽: 시점 →</div>
+    <div class="stick"><div class="knob"></div></div>
+    <button class="tbtn" data-touch="use">조사</button>
+    <button class="tbtn" data-touch="run">달리기</button>
+    <button class="tbtn" data-touch="crouch">숙이기</button>
+    <button class="tbtn" data-touch="torch">손전등</button>
+    <button class="tbtn" data-touch="pause">II</button>
+  </div>
   <div class="version">v1.0</div>
 
   <script type="module" src="./main.js"></script>

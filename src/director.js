@@ -122,7 +122,7 @@ export class Director {
     const far = s.inElevator || pathDist(s.phi, s.r, p.phi, p.r) > 30;
     switch (name) {
       case 'peek': {
-        if (!far) return this.fire('whisper');
+        if (!far || p.inRoom) return this.fire('whisper');
         // 맞은편 난간 너머, 한두 층 위에서 내려다봄 (참고 이미지의 구도)
         const up = Math.random() < 0.5 ? 0 : TAU;
         let phi = p.phi + Math.PI + (Math.random() - 0.5) * 0.7 + up;
@@ -135,7 +135,7 @@ export class Director {
         this.blackoutT = 1.7;
         this.torchKill = 1.7;
         a.drone(0.35, 2.6);
-        if (far) {
+        if (far && !p.inRoom) {
           // 어둠 속, 바로 앞 계단에 서 있다
           const ahead = Math.cos(p.yaw + p.phi) < 0 ? 1 : -1; // 바라보는 방향이 계단 위쪽인지
           const phi = Math.max(PHI_MIN, Math.min(PHI_MAX, p.phi + (ahead * 4.2) / R_MID));
