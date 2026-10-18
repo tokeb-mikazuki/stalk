@@ -284,23 +284,50 @@
     #touch .stick.on { display: block; }
     #touch .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.28); transform: translate(-50%, -50%); }
     #touch .zone-hint { position: absolute; left: 6vw; bottom: 9vh; font-size: 12px; color: rgba(255,255,255,.25); pointer-events: none; }
-    #touch .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); color: rgba(255,255,255,.75); touch-action: none; -webkit-tap-highlight-color: transparent; }
-    #touch .tbtn.down { background: rgba(255,255,255,.2); }
-    #touch .tbtn.active { border-color: var(--accent); color: var(--accent); }
-    #touch .tbtn svg { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    #touch [data-touch=use] { right: calc(22px + env(safe-area-inset-right)); bottom: 26px; width: 60px; height: 60px; }
-    #touch [data-touch=use].ready { border-color: var(--accent); color: #fff; box-shadow: 0 0 12px rgba(67,255,89,.45); }
-    #touch [data-touch=run] { right: calc(94px + env(safe-area-inset-right)); bottom: 22px; width: 50px; height: 50px; }
-    #touch [data-touch=crouch] { right: calc(92px + env(safe-area-inset-right)); bottom: 84px; width: 44px; height: 44px; }
-    #touch [data-touch=torch] { right: calc(30px + env(safe-area-inset-right)); bottom: 98px; width: 44px; height: 44px; }
-    #touch [data-touch=pause] { right: calc(12px + env(safe-area-inset-right)); top: 10px; width: 36px; height: 36px; border-radius: 8px; }
+    /* 터치 버튼: 반투명 유리 원판, 오른손 엄지 둘레에 부채꼴로 */
+    #touch .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgba(255,255,255,.16);
+      background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.08), rgba(8,8,10,.42)); color: rgba(236,232,222,.78); touch-action: none;
+      -webkit-tap-highlight-color: transparent; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 4px 14px rgba(0,0,0,.35); transition: transform .08s, background .12s, border-color .12s; }
+    #touch .tbtn.down { transform: scale(.92); background: rgba(255,255,255,.16); }
+    #touch .tbtn.active { border-color: rgba(255,90,80,.75); color: #ff8a80; box-shadow: 0 0 14px rgba(255,60,50,.25); }
+    #touch .tbtn svg { width: 42%; height: 42%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    #touch [data-touch=use] { right: calc(26px + env(safe-area-inset-right)); bottom: 26px; width: 68px; height: 68px; }
+    #touch [data-touch=use].ready { border-color: rgba(255,255,255,.7); color: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.08), 0 0 18px rgba(255,255,255,.18); }
+    #touch [data-touch=run] { right: calc(108px + env(safe-area-inset-right)); bottom: 20px; width: 52px; height: 52px; }
+    #touch [data-touch=crouch] { right: calc(100px + env(safe-area-inset-right)); bottom: 88px; width: 46px; height: 46px; }
+    #touch [data-touch=torch] { right: calc(36px + env(safe-area-inset-right)); bottom: 110px; width: 46px; height: 46px; }
+    #touch [data-touch=pause] { right: calc(14px + env(safe-area-inset-right)); top: 12px; width: 34px; height: 34px; border-radius: 10px; }
+    #touch .zone-hint { animation: fadeOut 1.2s 6s forwards; letter-spacing: .2em; }
     body.touch #hud { z-index: 6; }
-    body.touch #floor { top: 12px; left: calc(16px + env(safe-area-inset-left)); }
+    body.touch #floor { top: 14px; left: calc(18px + env(safe-area-inset-left)); }
     body.touch #floor .num { font-size: 28px; }
-    body.touch #meters { top: 86px; bottom: auto; left: calc(16px + env(safe-area-inset-left)); width: 160px; }
-    body.touch #detector { top: 12px; bottom: auto; right: calc(60px + env(safe-area-inset-right)); width: 150px; padding: 6px 8px; }
-    body.touch #dbars { height: 24px; }
-    body.touch #msg { bottom: 30%; }
+    body.touch #floor .goal { font-size: 11px; }
+    body.touch #meters { top: 48px; bottom: auto; left: calc(18px + env(safe-area-inset-left)); width: 132px; }
+    body.touch .meter { margin-top: 7px; }
+    body.touch .meter .lbl { font-size: 9px; letter-spacing: .22em; }
+    body.touch .meter .bar { height: 2px; }
+    body.touch #detector { top: 12px; bottom: auto; right: calc(60px + env(safe-area-inset-right)); width: 118px; padding: 5px 8px 4px; border-radius: 8px; border-color: rgba(60,80,60,.6); }
+    body.touch #detector .head { font-size: 9px; letter-spacing: .12em; white-space: nowrap; }
+    body.touch #detector .head i { display: none; }
+    #detector .head i { font-style: normal; }
+    body.touch #dbars { height: 18px; }
+    body.touch #msg { bottom: 26%; max-width: 62vw; }
+    body.touch #prompt { bottom: 112px; }
+    /* 세로 화면: 돌려 달라는 안내 (모바일은 가로 전용) */
+    #rotate { position: fixed; inset: 0; z-index: 200; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #050505; color: #e6e2d6; text-align: center; }
+    #rotate b { font-family: var(--serif); font-size: 20px; letter-spacing: .3em; margin-top: 18px; }
+    #rotate span { font-size: 10px; letter-spacing: .5em; color: #6f6b62; }
+    #rotate .phone { width: 46px; height: 80px; border: 2px solid #cfcabe; border-radius: 9px; position: relative; animation: rotPhone 2.4s ease-in-out infinite; }
+    #rotate .phone::after { content: ''; position: absolute; left: 50%; bottom: 6px; width: 10px; height: 2px; margin-left: -5px; background: #cfcabe; border-radius: 2px; }
+    @keyframes rotPhone { 0%, 20% { transform: rotate(0); } 55%, 80% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+    @media (orientation: portrait) { body.touch #rotate { display: flex; } }
+    #boot .fs-tip-m { display: none; margin-top: 22px; color: #cfcabe; }
+    body.touch #boot .fs-tip-m { display: block; }
+    #boot .skip span, #press .press-key span { display: inline; }
+    body:not(.touch) #boot .skip .touch-only, body:not(.touch) #press .press-key .touch-only { display: none; }
+    body.touch #boot .skip .pc-only, body.touch #press .press-key .pc-only { display: none; }
+    /* 일시정지: 뒤 화면을 어둡게 가라앉힌다 */
+    #pause { background: linear-gradient(90deg, rgba(4,4,5,.9) 0%, rgba(4,4,5,.72) 45%, rgba(4,4,5,.35) 100%); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
     .touch-only { display: none; }
     body.touch .touch-only { display: block; }
     body.touch .keys.touch-only { display: grid; }
@@ -311,6 +338,23 @@
       .dcard { min-height: 0; }
       #ach-list { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, auto); }
+    }
+    /* 모바일 가로 화면 (낮은 높이) */
+    @media (max-height: 520px) {
+      #newgame .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+      .dcard { padding: 10px 12px 12px; min-height: 0; }
+      .dcard:hover, .dcard:focus, .dcard.sel { transform: translateY(-3px); }
+      .dcard h3 { font-size: 18px; margin-top: 4px; }
+      .dcard .lv { font-size: 9px; }
+      .dcard .floors { font-size: 10px; }
+      .dcard p { font-size: 10.5px; line-height: 1.5; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .dcard .stat { grid-template-columns: 44px 1fr; font-size: 9px; margin-top: 4px; gap: 6px; }
+      .dcard .badge { top: 8px; right: 8px; font-size: 9px; }
+      .dcard .lock { font-size: 11px; }
+      #pause .p-head h2 { font-size: 28px; }
+      #pause .p-info { margin-bottom: 2vh; }
+      #pause .menu .mi { padding-top: 6px; padding-bottom: 6px; }
+      .stats .st { padding: 8px 14px; }
     }
     @media (max-height: 600px) {
       .screen-head { padding-top: 3vh; }
@@ -323,6 +367,11 @@
   </style>
 </head>
 <body class="menu-on">
+  <script>
+    // 터치 기기 표시를 가장 먼저 (부팅 화면 문구도 모바일용으로)
+    if ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+  </script>
+  <div id="rotate"><div class="phone"></div><b>가로로 돌려 주세요</b><span>ROTATE YOUR DEVICE</span></div>
   <div id="app"></div>
   <div class="grain"></div>
 
@@ -335,8 +384,9 @@
         광과민성 발작 위험이 있거나 심장이 약한 분은 플레이에 주의하십시오.<br /><br />
         이어폰 또는 헤드폰 착용을 권장합니다.</p>
       <p class="fs-tip"><kbd>F11</kbd> 키를 눌러 <b>전체 화면</b>으로 플레이하는 것을 권장합니다.</p>
+      <p class="fs-tip-m"><b>가로 화면</b>으로 플레이합니다. 시작하면 전체 화면으로 전환됩니다.</p>
     </div>
-    <div class="skip">클릭하여 건너뛰기</div>
+    <div class="skip"><span class="pc-only">클릭하여 건너뛰기</span><span class="touch-only">화면을 탭하여 건너뛰기</span></div>
   </div>
 
   <!-- 로딩 -->
@@ -350,7 +400,7 @@
   <!-- 시작 대기 -->
   <div id="press">
     <div class="logo"><div class="en">SONGSHIN STAIRWELL</div><h1>공포의 송신계단</h1><div class="line"></div></div>
-    <div class="press-key">아무 키나 누르거나 클릭하세요</div>
+    <div class="press-key"><span class="pc-only">아무 키나 누르거나 클릭하세요</span><span class="touch-only">화면을 탭하세요</span></div>
   </div>
 
   <div id="hud">
@@ -360,7 +410,7 @@
       <div class="meter" id="battery"><div class="lbl"><span>LIGHT · 손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
     </div>
     <div id="detector">
-      <div class="head"><span>SIGNAL 송신</span><b>신호 없음</b></div>
+      <div class="head"><span>SIGNAL<i> 송신</i></span><b>신호 없음</b></div>
       <div id="dbars"></div>
     </div>
     <div id="cross"></div>

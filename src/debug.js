@@ -22,6 +22,9 @@ const CSS = `
 #debug button.warn { border-color: #5a2a2a; color: #ffbcbc; background: #201212; }
 #debug pre { margin: 6px 0 0; padding: 8px; background: #050705; border: 1px solid #1a241a; color: #9fd89f; white-space: pre-wrap; font-size: 11px; }
 #debug .hint { color: #5d6f5d; font-size: 10px; margin-top: 8px; }
+body.touch #debug { top: 8px; right: 8px; width: 290px; max-height: calc(100vh - 16px); -webkit-overflow-scrolling: touch; }
+body.touch #debug h3 button { font-size: 18px; padding: 0 8px; }
+body.touch #debug button.b { padding: 7px 10px; }
 `;
 
 export class DebugPanel {
@@ -33,6 +36,7 @@ export class DebugPanel {
     this.hide = false;     // 송신 숨김 (없는 것처럼)
     this.infinite = false; // 체력·배터리 무한
     this.speed = 1;        // 게임 속도
+    this.auto = false;     // 자동 클리어 AI
     this.seq = 0;
     this.infoT = 0;
     const st = document.createElement('style');
@@ -46,6 +50,9 @@ export class DebugPanel {
       <div class="row">층 <input type="number" id="dbg-floor" min="1" value="1"> <button class="b" data-dbg="go">이동</button>
         <button class="b" data-dbg="top">꼭대기</button></div>
       <div class="row"><button class="b" data-dbg="win">즉시 탈출 (엔딩)</button><button class="b" data-dbg="key">열쇠 얻기</button></div>
+      <h4>자동 클리어 AI</h4>
+      <label><input type="checkbox" data-opt="auto"> 자동 클리어 AI 켜기</label>
+      <div class="row" style="color:#8fbf8f">AI: <span id="dbg-ai">꺼짐</span></div>
       <h4>송신</h4>
       <label><input type="checkbox" data-opt="god"> 무적 (잡히지 않음)</label>
       <label><input type="checkbox" data-opt="freeze"> 송신 정지 (AI 멈춤)</label>
@@ -61,7 +68,7 @@ export class DebugPanel {
       <div class="row"><button class="b warn" data-dbg="reset">진행 초기화</button></div>
       <h4>상태</h4>
       <pre id="dbg-info">-</pre>
-      <div class="hint">↑↑↓↓←→←→BA 또는 Esc 로 닫기</div>`;
+      <div class="hint">↑↑↓↓←→←→BA 또는 Esc 로 닫기 · 모바일: 일시정지 화면 'PAUSED' 5번 탭</div>`;
     document.body.appendChild(el);
     this.info = el.querySelector('#dbg-info');
     el.addEventListener('click', (e) => {
@@ -71,6 +78,10 @@ export class DebugPanel {
     el.addEventListener('change', (e) => {
       const opt = e.target.dataset.opt;
       if (opt) this[opt] = e.target.checked;
+      if (opt === 'auto') {
+        this.g.autopilot.reset();
+        if (!this.auto) for (const k in this.g.input) this.g.input[k] = false;
+      }
     });
     const sp = el.querySelector('#dbg-speed');
     sp.addEventListener('input', () => {
@@ -213,6 +224,8 @@ export class DebugPanel {
     const g = this.g, p = g.player, s = g.stalker, el = g.elevator;
     if (!g.world || !p) return;
     const b = s.belief;
+    const ap = g.autopilot;
+    this.el.querySelector('#dbg-ai').textContent = this.auto ? `${ap.state} — ${ap.status}` : '꺼짐';
     this.info.textContent = [
       `상태     ${g.state}  ${g.diff ? g.diff.label : ''}`,
       `플레이어 ${p.floor + 1}F${p.inRoom ? ' (비상실)' : p.inCar ? ' (엘리베이터)' : ''}  체류 ${p.floorTime.toFixed(0)}s`,

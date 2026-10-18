@@ -19,6 +19,7 @@ import { Elevator } from './elevator.js';
 import { VOICE, voiceText } from './voice.js';
 import { Ending } from './ending.js';
 import { DebugPanel } from './debug.js';
+import { AutoPilot } from './autopilot.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 const CCTV_FPS = 8; // 감시 카메라 화면은 초당 8장
@@ -99,6 +100,11 @@ class Game {
     this.audio.volume = this.settings.vol;
     this.hud = new Hud();
     this.debug = new DebugPanel(this); // 코나미 코드(↑↑↓↓←→←→BA)로 여는 디버그 패널
+    this.autopilot = new AutoPilot(this); // 디버그: 자동 클리어 AI
+    // 모바일은 가로 전용: 세로로 돌리면 안내 화면이 덮고, 게임 중이면 일시정지
+    window.matchMedia?.('(orientation: portrait)').addEventListener?.('change', (e) => {
+      if (e.matches && this.isTouch && this.state === 'playing') this.pause();
+    });
     this.progress.onUnlock = (a) => {
       this.hud.toast(`도전과제 달성 — ${a.name}`);
       this.audio.ctx && this.audio.pickup(true);
@@ -221,6 +227,18 @@ class Game {
       KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r',
       ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyC: 'crouch', ControlLeft: 'crouch', ControlRight: 'crouch',
     };
+    // 모바일: 일시정지 화면의 'PAUSED' 제목을 빠르게 5번 탭 → 디버그 패널 (키보드가 없으니 코나미 코드 대신)
+    let headTaps = 0, headT = 0;
+    document.querySelector('#pause .p-head').addEventListener('pointerdown', () => {
+      const now = performance.now();
+      headTaps = now - headT < 600 ? headTaps + 1 : 1;
+      headT = now;
+      if (headTaps >= 5) {
+        headTaps = 0;
+        this.resume(); // 패널의 순간이동·자동 클리어는 플레이 중에만 듣는다
+        this.debug.toggle(true);
+      }
+    });
     window.addEventListener('keydown', (e) => {
       if (this.debug.open) return; // 디버그 패널이 열려 있으면 게임 조작은 쉰다
       if (keyMap[e.code]) {
@@ -313,7 +331,7 @@ class Game {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       this.lockTime = performance.now();
-      if (!locked && this.state === 'playing' && !this.hud.noteOpen && !this.ignoreUnlock && !this.debug.open) this.pause();
+      if (!locked && this.state === 'playing' && !this.hud.noteOpen && !this.ignoreUnlock && !this.debug.open && !this.debug.auto) this.pause();
       this.ignoreUnlock = false;
     });
   }
@@ -535,9 +553,11 @@ class Game {
     this.audio.setVolume(this.settings.vol);
     this.audio.silence(false);
     this.audio.titleMusic(false);
+    this.landscapeFullscreen();
     this.leaveEnding();
     this.huntFloor = null;
     this.hasKey = false;
+    this.autopilot?.reset();
     this.diffKey = diffKey;
     this.diff = DIFFICULTY[diffKey];
     this.ensureWorld(this.diff.floors);
@@ -593,6 +613,8 @@ class Game {
     this.state = 'paused';
     document.getElementById('pause-info').textContent = `${this.diff.label} · ${formatTime(this.time)}`;
     this.hud.screen('pause');
+    this.hud.show(false); // 일시정지 화면 뒤로 HUD·안내 문구가 비치지 않게
+    this.hud.msgEl?.classList.remove('on');
     this.touch.show(false);
     // 30초 넘게 멈춰 있으면 화면이 깨진다
     this.pauseT = 0;
@@ -605,9 +627,18 @@ class Game {
     if (this.state !== 'paused') return;
     this.state = 'playing';
     this.hud.screen(null);
+    this.hud.show(true);
     this.audio.ctx?.resume();
     this.touch.show(true);
     this.lock();
+  }
+
+  /** 모바일: 전체 화면 + 가로 고정 (탭 같은 사용자 동작 안에서만 가능, iOS 는 지원하지 않음) */
+  landscapeFullscreen() {
+    if (!this.isTouch) return;
+    const el = document.documentElement;
+    const fs = !document.fullscreenElement && el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve();
+    Promise.resolve(fs).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
   }
 
   /**
@@ -621,6 +652,7 @@ class Game {
     if (this.state === 'paused') {
       this.state = 'playing';
       this.hud.screen(null);
+      this.hud.show(true);
       this.audio.ctx?.resume();
       this.touch.show(true);
       if (!this.touch.enabled) this.hud.clickHint.classList.add('on');
@@ -1493,6 +1525,7 @@ class Game {
     this.fadeIn = Math.max(0, this.fadeIn - dt * 0.45);
     u.uFade.value = this.fadeIn;
 
+    if (this.debug.auto) this.autopilot.update(dt); // 디버그: 자동 클리어 AI 가 입력을 대신한다
     const reading = this.hud.noteOpen;
     this.noteT = reading ? (this.noteT || 0) + dt : 0;
     if (this.noteT > 30) this.breakPause();
@@ -1918,6 +1951,7 @@ async function boot() {
   press.classList.add('on');
   await waitInput(press);
   press.classList.remove('on');
+  game.landscapeFullscreen();
   game.audio.init();
   game.audio.setVolume(game.settings.vol);
   game.audio.uiStart();
