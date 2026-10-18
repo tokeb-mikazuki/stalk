@@ -1133,7 +1133,7 @@ class Game {
   startTrap() {
     const p = this.player, el = this.elevator;
     const k = p.carK;
-    const offs = [2, 3, 4, -2, -3].map((o) => k + o).filter((t) => t >= 0 && t < FLOORS);
+    const offs = [2, 3, 4, 5, -2, -3, -4].map((o) => k + o).filter((t) => t >= 0 && t < FLOORS);
     const T = offs[Math.floor(Math.random() * offs.length)];
     this.trap = { T, t: 0 };
     this.run.trapped = true;
@@ -1141,7 +1141,9 @@ class Game {
     el.dest = null;
     el.target = null;
     el.occupant = 'player';
-    el.speedMul = 1;
+    // 최소 10초(10~13초)는 움직인 뒤에야 문이 열린다
+    const ride = 10 + Math.random() * 3;
+    el.speedMul = Math.min(1, (Math.abs(T - k) * this.diff.elevatorSecPerFloor) / ride);
     el.send(T);
     this.stalker.setTrap(T);
   }
@@ -1154,11 +1156,13 @@ class Game {
     const o = open * open * (3 - 2 * open);
     car.left.position.x = -0.3 - o * 0.56;
     car.right.position.x = 0.3 + o * 0.56;
+    // 천장 조명은 늘 켜져 있다 (문 유리창으로 지나가는 칸이 보인다). 실내를 비추는 광원은
+    // 문이 열렸거나 안에 있을 때만 — 닫힌 벽 너머 계단실까지 빛이 새지 않게
     const lit = open > 0.02 || p.carK >= 0;
     // 함정 이동 중에는 조명이 불안하게 깜빡인다
-    let lv = lit ? 1 : 0;
+    let lv = 1;
     if (this.trap && el.moving && Math.random() < 0.08) lv = 0.15;
-    car.light.intensity = 6 * lv;
+    car.light.intensity = lit ? 6 * lv : 0;
     car.lightMat.color.setScalar(2.4 * lv + 0.05);
   }
 

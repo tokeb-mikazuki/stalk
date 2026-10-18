@@ -10,7 +10,7 @@ import {
   tileTexture, concreteTexture, stepTexture, metalTexture, floorSignTexture,
   glitchSignTexture, fireDoorTexture, roofDoorTexture, startWallTexture,
   IndicatorTexture, paperTexture, glowTexture, exitSignTexture, normalMapFrom, roughnessMapFrom, callButtonTexture,
-  stainlessTexture, carWallTexture, copTexture, cautionStickerTexture, capacityPlateTexture, carFloorTexture,
+  stainlessTexture, carWallTexture, copTexture, capacityPlateTexture, carFloorTexture,
   carCeilingTexture, sillTexture,
 } from './textures.js';
 
@@ -118,7 +118,8 @@ export function buildWorld(scene) {
     steel: new THREE.MeshStandardMaterial({ map: tex.steel, normalMap: nrm.steel, normalScale: ns(0.2), roughness: 0.28, metalness: 0.9, envMapIntensity: 0.3 }),
     sill: new THREE.MeshStandardMaterial({ map: tex.sill, roughness: 0.45, metalness: 0.8, envMapIntensity: 0.3 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.8 }),
-    sticker: new THREE.MeshStandardMaterial({ map: cautionStickerTexture(), roughness: 0.55 }),
+    // 문의 세로 유리창: 실제로 비쳐 보이는 어두운 청동빛 유리
+    glass: new THREE.MeshStandardMaterial({ color: 0x8a8068, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
     car: new THREE.MeshStandardMaterial({ map: tex.metal, color: 0x6a6a6a, roughness: 0.4, metalness: 0.6, side: THREE.BackSide }),
     wood: new THREE.MeshStandardMaterial({ color: 0x4a3f33, roughness: 0.9 }),
     cardboard: new THREE.MeshStandardMaterial({ color: 0x5a5046, roughness: 1 }),
@@ -391,6 +392,46 @@ export function buildWorld(scene) {
   };
 }
 
+/**
+ * 엘리베이터 문짝 한 장. withWindow 면 가운데에 세로 유리창이 실제로 뚫려 있다 (안팎이 비쳐 보인다).
+ * 원점 = 문짝 가운데, 높이 h, 너비 w, 두께 d. 반환값은 Group (문 열림 애니메이션은 position.x 만 바꾼다)
+ */
+export function doorLeaf(w, h, d, steelMat, mat, withWindow, sealSide) {
+  const leaf = new THREE.Group();
+  const add = (bw, bh, x, y) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, d), steelMat);
+    m.position.set(x, y, 0);
+    m.castShadow = m.receiveShadow = true;
+    leaf.add(m);
+  };
+  if (!withWindow) add(w, h, 0, 0);
+  else {
+    const ww = 0.2, wh = 1.3, wy0 = 0.52 - h / 2; // 창: 너비 20cm, 높이 1.3m, 바닥에서 52cm 위부터
+    const side = (w - ww) / 2;
+    add(side, h, -w / 2 + side / 2, 0);
+    add(side, h, w / 2 - side / 2, 0);
+    add(ww, wy0 + h / 2, 0, (-h / 2 + wy0) / 2);
+    const topH = h / 2 - (wy0 + wh);
+    add(ww, topH, 0, h / 2 - topH / 2);
+    // 창틀 안쪽 면 (두께가 보이도록) + 유리
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), mat.glass);
+    glass.position.set(0, wy0 + wh / 2, 0);
+    glass.renderOrder = 3;
+    leaf.add(glass);
+    const rim = new THREE.MeshStandardMaterial({ color: 0x2a2b2e, roughness: 0.5, metalness: 0.6 });
+    for (const [bw, bh, x, y] of [[0.008, wh, -ww / 2, wy0 + wh / 2], [0.008, wh, ww / 2, wy0 + wh / 2], [ww, 0.008, 0, wy0], [ww, 0.008, 0, wy0 + wh]]) {
+      const r = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, d + 0.004), rim);
+      r.position.set(x, y, 0);
+      leaf.add(r);
+    }
+  }
+  // 가운데(맞닿는 쪽) 고무 패킹
+  const seal = new THREE.Mesh(new THREE.BoxGeometry(0.008, h - 0.02, d + 0.002), mat.rubber);
+  seal.position.set(sealSide * (w / 2 - 0.004), 0, 0);
+  leaf.add(seal);
+  return leaf;
+}
+
 function buildElevator(root, mat, indicatorMat, k) {
   const y = k * FLOOR_H;
   const g = new THREE.Group();
@@ -420,22 +461,12 @@ function buildElevator(root, mat, indicatorMat, k) {
   // 문턱: 홈이 파인 알루미늄
   const sill = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.06, 0.02, 0.2), mat.sill);
   sill.position.set(0, 0.01, -0.02);
-  // 문짝: 헤어라인 스테인리스 + 가운데 고무 패킹 + '손 끼임 주의' 스티커 (문과 함께 움직인다)
-  const panelGeo = new THREE.BoxGeometry(hw, H, 0.035);
-  const left = new THREE.Mesh(panelGeo, mat.steel);
-  const right = new THREE.Mesh(panelGeo, mat.steel);
+  // 문짝: 헤어라인 스테인리스 + 가운데 고무 패킹. 오른쪽 문짝에는 세로 유리창 (안이 비쳐 보인다)
+  const left = doorLeaf(hw, H, 0.035, mat.steel, mat, false, 1);
+  const right = doorLeaf(hw, H, 0.035, mat.steel, mat, true, -1);
   left.position.set(-hw / 2, H / 2, -0.03);
   right.position.set(hw / 2, H / 2, -0.03);
-  const sealGeo = new THREE.BoxGeometry(0.008, H - 0.02, 0.037);
-  const stickerGeo = new THREE.PlaneGeometry(0.085, 0.106);
-  for (const [panel, side] of [[left, 1], [right, -1]]) {
-    const seal = new THREE.Mesh(sealGeo, mat.rubber);
-    seal.position.set(side * (hw / 2 - 0.004), 0, 0);
-    const st = new THREE.Mesh(stickerGeo, mat.sticker);
-    st.position.set(side * (hw / 2 - 0.11), 1.05 - H / 2, 0.0185);
-    panel.add(seal, st);
-  }
-  for (const m of [pl, pr, lintel, left, right, sill]) { m.castShadow = true; m.receiveShadow = true; }
+  for (const m of [pl, pr, lintel, sill]) { m.castShadow = true; m.receiveShadow = true; }
 
   // 문 오른쪽 승강장 패널: 스테인리스 판 + 빨간 LED 표시기 + ▲▼ 호출 버튼
   const px = hw + 0.36;
@@ -593,17 +624,11 @@ export function buildCar(root, mat) {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.1, metalness: 0.4 }));
   dome.rotation.x = Math.PI;
   dome.position.set(-0.62, 2.38, -1.42);
-  // 칸 자체의 안쪽 문 (승강장 문과 함께 열림): 같은 스테인리스 + 가운데 고무 패킹
-  const doorGeo = new THREE.BoxGeometry(0.6, 2.28, 0.03);
-  const left = new THREE.Mesh(doorGeo, front);
-  const right = new THREE.Mesh(doorGeo, front);
+  // 칸 자체의 안쪽 문 (승강장 문과 함께 열림): 같은 스테인리스, 오른쪽 문짝에 승강장 문과 겹치는 유리창
+  const left = doorLeaf(0.6, 2.28, 0.03, front, mat, false, 1);
+  const right = doorLeaf(0.6, 2.28, 0.03, front, mat, true, -1);
   left.position.set(-0.3, 1.14, -0.09);
   right.position.set(0.3, 1.14, -0.09);
-  for (const [d, side] of [[left, 1], [right, -1]]) {
-    const seal = new THREE.Mesh(new THREE.BoxGeometry(0.008, 2.26, 0.032), mat.rubber);
-    seal.position.set(side * 0.296, 0, 0);
-    d.add(seal);
-  }
   // 문턱
   const sill = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.02, 0.12), mat.sill);
   sill.position.set(0, 0.01, -0.1);

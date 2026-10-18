@@ -616,30 +616,6 @@ export function copTexture(floors) {
   return toTexture(c, false);
 }
 
-/** 문에 붙은 '손 끼임 주의' 스티커 */
-export function cautionStickerTexture() {
-  const [c, ctx] = canvas(128, 160);
-  ctx.fillStyle = '#f2c21b';
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(4, 4, 120, 152, 10) : ctx.rect(4, 4, 120, 152);
-  ctx.fill();
-  ctx.strokeStyle = '#1b1b1b';
-  ctx.lineWidth = 5;
-  ctx.stroke();
-  // 문 사이에 낀 손
-  ctx.fillStyle = '#1b1b1b';
-  ctx.fillRect(60, 18, 8, 80);
-  ctx.beginPath();
-  ctx.ellipse(46, 62, 16, 22, 0, 0, Math.PI * 2);
-  ctx.fill();
-  for (let i = 0; i < 4; i++) ctx.fillRect(48 + i * 0, 36 + i * 9, 18, 5);
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 19px "Noto Sans KR", sans-serif';
-  ctx.fillText('손 끼임', 64, 120);
-  ctx.fillText('주의', 64, 142);
-  return toTexture(c, false);
-}
-
 /** 정원·적재하중 표지판 */
 export function capacityPlateTexture() {
   const [c, ctx] = canvas(256, 128);
