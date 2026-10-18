@@ -1,6 +1,9 @@
 // DOM HUD / 화면 전환
 const $ = (s) => document.querySelector(s);
 
+// 왼쪽 버튼이 칠해진 마우스 아이콘
+const MOUSE_LEFT = '<svg class="mouse" viewBox="0 0 16 22" aria-label="좌클릭"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v8M1.8 9h12.4" stroke="currentColor" stroke-width="1.2"/><path d="M8 1.2A6.8 6.8 0 0 0 1.2 8V9H8z" fill="currentColor"/></svg>';
+
 export class Hud {
   constructor() {
     this.el = $('#hud');
@@ -78,7 +81,10 @@ export class Hud {
   setPrompt(text) {
     if (text === this.lastPrompt) return;
     this.lastPrompt = text;
-    if (text) this.prompt.innerHTML = `<kbd>${this.keyLabel || 'E'}</kbd>${text}`;
+    if (text) {
+      const touch = this.keyLabel && this.keyLabel !== 'E';
+      this.prompt.innerHTML = touch ? `<kbd>${this.keyLabel}</kbd>${text}` : `<kbd>E</kbd>${MOUSE_LEFT}${text}`;
+    }
     this.prompt.classList.toggle('on', !!text);
   }
 

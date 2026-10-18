@@ -262,12 +262,16 @@ export function paperTexture(seed) {
   return toTexture(c, false);
 }
 
-/** 모든 층 엘리베이터 표시기가 공유하는 텍스처 */
+/** 모든 층 승강장 패널이 공유하는 빨간 LED 도트 표시기 (방향 화살표 + 층수) */
 export class IndicatorTexture {
   constructor() {
-    const [c, ctx] = canvas(256, 128);
+    const [c, ctx] = canvas(120, 180);
     this.canvas = c;
     this.ctx = ctx;
+    // 저해상도 격자에 그린 뒤 LED 점으로 옮긴다
+    const [g, gctx] = canvas(20, 30);
+    this.grid = g;
+    this.gctx = gctx;
     this.texture = toTexture(c, false);
     this.last = '';
     this.draw('1', 0, false, false);
@@ -278,29 +282,68 @@ export class IndicatorTexture {
     const key = `${text}|${dir}|${err}|${red}`;
     if (key === this.last) return;
     this.last = key;
+    const g = this.gctx;
+    g.clearRect(0, 0, 20, 30);
+    g.fillStyle = '#fff';
+    // 화살표 (위쪽 0~11행)
+    if (dir !== 0) {
+      g.beginPath();
+      if (dir > 0) {
+        g.moveTo(10, 1); g.lineTo(15.5, 6.5); g.lineTo(12, 6.5); g.lineTo(12, 11); g.lineTo(8, 11); g.lineTo(8, 6.5); g.lineTo(4.5, 6.5);
+      } else {
+        g.moveTo(10, 11); g.lineTo(15.5, 5.5); g.lineTo(12, 5.5); g.lineTo(12, 1); g.lineTo(8, 1); g.lineTo(8, 5.5); g.lineTo(4.5, 5.5);
+      }
+      g.closePath();
+      g.fill();
+    }
+    // 층수 (아래쪽 13~28행)
+    g.font = `bold ${text.length > 1 ? 13 : 15}px "Arial Narrow", Arial, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(err ? '--' : text, 10, 21.5);
+    const px = g.getImageData(0, 0, 20, 30).data;
+
     const ctx = this.ctx;
-    ctx.fillStyle = '#050505';
-    ctx.fillRect(0, 0, 256, 128);
-    ctx.strokeStyle = '#2a2a2a';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, 250, 122);
-    const on = red ? '#ff3030' : '#43ff59';
-    const off = '#1a1a1a';
-    ctx.font = 'bold 40px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = dir > 0 && !err ? on : off;
-    ctx.fillText('▲', 46, 42);
-    ctx.fillStyle = dir < 0 && !err ? on : off;
-    ctx.fillText('▼', 46, 92);
-    ctx.font = 'bold 76px "Courier New", monospace';
-    ctx.fillStyle = err ? '#3a1010' : on;
-    ctx.shadowColor = err ? 'transparent' : on;
-    ctx.shadowBlur = 14;
-    ctx.fillText(err ? 'Err' : text, 160, 68);
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#060404';
+    ctx.fillRect(0, 0, 120, 180);
+    const on = red ? '#ff2a1a' : '#ff3b26';
+    for (let y = 0; y < 30; y++) {
+      for (let x = 0; x < 20; x++) {
+        const lit = px[(y * 20 + x) * 4 + 3] > 110;
+        ctx.fillStyle = lit ? on : '#1c0806';
+        ctx.beginPath();
+        ctx.arc(3 + x * 6, 3 + y * 6, lit ? 2.5 : 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // 유리 반사
+    const gl = ctx.createLinearGradient(0, 0, 120, 180);
+    gl.addColorStop(0, 'rgba(255,255,255,0.06)');
+    gl.addColorStop(0.4, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gl;
+    ctx.fillRect(0, 0, 120, 180);
     this.texture.needsUpdate = true;
   }
+}
+
+/** 승강장 호출 버튼 면 (원 안에 화살표) */
+export function callButtonTexture(dir) {
+  const [c, ctx] = canvas(64, 64);
+  const g = ctx.createRadialGradient(28, 26, 4, 32, 32, 32);
+  g.addColorStop(0, '#dcdcdc');
+  g.addColorStop(1, '#8e8e8e');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(32, 32, 32, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5a5a5a';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (dir > 0) { ctx.moveTo(20, 40); ctx.lineTo(32, 22); ctx.lineTo(44, 40); }
+  else { ctx.moveTo(20, 24); ctx.lineTo(32, 42); ctx.lineTo(44, 24); }
+  ctx.stroke();
+  return toTexture(c, false);
 }
 
 /** 부드러운 원형 글로우 */

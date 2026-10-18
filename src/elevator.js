@@ -94,7 +94,7 @@ export class Elevator {
       this.target = null;
       if (this.dest === k) this.dest = null;
       this.calls = this.calls.filter((c) => c.k !== k);
-      for (const e of elevs) if (e.k === k) e.btnMat.color.setHex(0x334433);
+      elevs[k].setCall(false);
       this.openDoors(k, this.occupant === 'stalker' ? 6 : 4.5);
     } else {
       this.floor += Math.sign(d) * step;

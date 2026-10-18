@@ -112,7 +112,7 @@ class Game {
 
     this.touch = new TouchControls(this);
     this.touch.enable(this.isTouch);
-    this.hud.keyLabel = this.isTouch ? '조사' : 'E / 클릭';
+    this.hud.keyLabel = this.isTouch ? '조사' : 'E';
     // 노트북 등에서 처음 터치하면 터치 조작 켜기
     window.addEventListener('touchstart', () => {
       if (this.touch.enabled) return;
@@ -250,16 +250,20 @@ class Game {
       const sens = 0.0022 * this.settings.sens;
       this.player.look(mx, my * (this.settings.invert ? -1 : 1), sens);
     });
-    // 마우스 좌클릭: 문·CCTV 모니터·물건을 보고 있으면 그것을 사용, 아니면 손전등 켜기/끄기
+    // 마우스: 좌클릭 = 상호작용, 우클릭 = 손전등 켜기/끄기
+    document.addEventListener('contextmenu', (e) => {
+      if (this.state === 'playing') e.preventDefault();
+    });
     document.addEventListener('mousedown', (e) => {
-      if (e.button !== 0 || this.state !== 'playing' || this.cctv || this.hud.noteOpen) return;
+      if (this.state !== 'playing' || this.cctv || this.hud.noteOpen) return;
       if (document.pointerLockElement !== canvas) return;
-      if (this.findInteractable()) {
-        this.interact();
-        return;
+      if (e.button === 0) {
+        if (this.findInteractable()) this.interact();
+      } else if (e.button === 2) {
+        e.preventDefault();
+        if (this.player.toggleTorch()) this.audio.torchClick();
+        else this.hud.msg('배터리 없음', 1.8);
       }
-      if (this.player.toggleTorch()) this.audio.torchClick();
-      else this.hud.msg('배터리 없음', 1.8);
     });
     canvas.addEventListener('click', () => {
       this.hud.clickHint.classList.remove('on');
@@ -511,7 +515,7 @@ class Game {
     this.hints = new Set(this.progress.data.hints || []); // 이미 본 안내는 다시 띄우지 않음
     this.resetDoors();
     this.rollLocks();
-    for (const e of this.world.elevators) e.btnMat.color.setHex(0x334433);
+    for (const e of this.world.elevators) e.setCall(false);
     for (let k = 0; k < FLOORS; k++) this.director.setSignGlitch(k, false);
     this.placeItems();
     this.hud.screen(null);
@@ -758,7 +762,7 @@ class Game {
       if (el.doorK === t.k) el.hold(4);
       else {
         el.call(t.k, 'player');
-        this.world.elevators[t.k].btnMat.color.setHex(0xff3322);
+        this.world.elevators[t.k].setCall(true);
         this.hud.msg('엘리베이터를 불렀다', 1.6);
       }
     } else if (t.kind === 'carpanel') {

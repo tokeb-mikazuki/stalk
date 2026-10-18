@@ -77,7 +77,11 @@ void main() {
 
   // 흑백 + 약간의 냉색
   float l = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(vec3(l), col, uSat);
+  // 대부분은 흑백이지만, 채도 높고 밝은 빛(LED·호출 버튼·비상구 표시등)은 색을 살린다
+  float mx = max(col.r, max(col.g, col.b)), mn = min(col.r, min(col.g, col.b));
+  float chroma = (mx - mn) / max(mx, 1e-3);
+  float keep = smoothstep(0.45, 0.8, chroma) * smoothstep(0.12, 0.45, mx);
+  col = mix(vec3(l), col, mix(uSat, 0.95, keep));
   col *= vec3(0.96, 1.0, 1.05);
   col = clamp((col - 0.5) * 1.12 + 0.5, 0.0, 1.0);
 

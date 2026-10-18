@@ -212,7 +212,8 @@
     #cross { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,.5); box-shadow: 0 0 3px #000; }
     #prompt { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); font-size: clamp(12px, 0.8vw + 0.7vh, 22px); padding: .4em .9em; background: rgba(8,8,8,.8); border: 1px solid #2c2c2c; display: none; white-space: nowrap; letter-spacing: .05em; }
     #prompt.on { display: block; animation: fadeIn .2s both; }
-    #prompt kbd { font-family: var(--mono); color: #111; background: #e6e2d6; font-weight: 700; padding: 0 .45em; margin-right: .6em; border-radius: 2px; font-size: .9em; }
+    #prompt kbd { font-family: var(--mono); color: #111; background: #e6e2d6; font-weight: 700; padding: 0 .45em; margin-right: .45em; border-radius: 2px; font-size: .9em; }
+    #prompt .mouse { width: .8em; height: 1.1em; vertical-align: -.2em; margin-right: .6em; color: #e6e2d6; }
     #msg { position: absolute; left: 50%; bottom: 17%; transform: translateX(-50%); font-size: clamp(13px, 1.1vw + 0.9vh, 28px); line-height: 1.45; padding: 0.3em 0.8em; background: radial-gradient(ellipse at center, rgba(0,0,0,.5), rgba(0,0,0,0) 70%); text-align: center; text-shadow: 0 0 8px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; max-width: 80vw; }
     #msg.on { opacity: 1; }
     #msg.alert { color: #ff4040; font-weight: 700; letter-spacing: .08em; text-shadow: 0 0 10px rgba(255,0,0,.55), 0 0 2px #000; }
@@ -418,9 +419,8 @@
         <kbd>마우스</kbd><span>시점 회전</span>
         <kbd>Shift</kbd><span>달리기 (체력 소모)</span>
         <kbd>C / Ctrl</kbd><span>웅크리기 (조용히 이동)</span>
-        <kbd>마우스 좌클릭</kbd><span>문·CCTV·물건을 보고 있으면 사용, 아니면 손전등 켜기/끄기</span>
-        <kbd>E</kbd><span>줍기 · 읽기 · 비상문 여닫기 · CCTV</span>
-        <kbd>F</kbd><span>손전등 켜기/끄기</span>
+        <kbd>E / 좌클릭</kbd><span>상호작용 — 줍기 · 읽기 · 문 여닫기 · CCTV · 엘리베이터 호출</span>
+        <kbd>우클릭 / F</kbd><span>손전등 켜기/끄기</span>
         <kbd>Esc</kbd><span>일시정지</span>
       </div>
       <h4>생존 수칙</h4>

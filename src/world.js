@@ -9,7 +9,7 @@ import {
 import {
   tileTexture, concreteTexture, stepTexture, metalTexture, floorSignTexture,
   glitchSignTexture, fireDoorTexture, roofDoorTexture, startWallTexture,
-  IndicatorTexture, paperTexture, glowTexture, exitSignTexture, normalMapFrom, roughnessMapFrom,
+  IndicatorTexture, paperTexture, glowTexture, exitSignTexture, normalMapFrom, roughnessMapFrom, callButtonTexture,
 } from './textures.js';
 
 export let TOP_Y = 0;
@@ -272,7 +272,9 @@ export function buildWorld(scene) {
   // ---------- 층별 구조물 ----------
   const indicator = new IndicatorTexture();
   const indicatorMat = new THREE.MeshBasicMaterial({ map: indicator.texture, toneMapped: false });
-  indicatorMat.color.setScalar(1.8);
+  indicatorMat.color.setScalar(1.7);
+  mat.panel = new THREE.MeshStandardMaterial({ map: tex.metal, normalMap: tex.normals.metal, normalScale: new THREE.Vector2(0.3, 0.3), color: 0xd0d2d4, roughness: 0.3, metalness: 0.9 });
+  mat.callTex = [callButtonTexture(1), callButtonTexture(-1)];
   const doorMats = {
     front: new THREE.MeshStandardMaterial({ map: fireDoorTexture(), roughness: 0.7, metalness: 0.3 }),
     back: new THREE.MeshStandardMaterial({ color: 0x41463f, roughness: 0.75, metalness: 0.3 }),
@@ -355,22 +357,53 @@ function buildElevator(root, mat, indicatorMat, k) {
   right.position.set(hw / 2, 1.14, -0.02);
   for (const m of [pl, pr, lintel, left, right]) { m.castShadow = true; m.receiveShadow = true; }
 
-  const ind = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.31), indicatorMat);
-  ind.position.set(0, 2.66, 0.11);
+  // 문 오른쪽 승강장 패널: 스테인리스 판 + 빨간 LED 표시기 + ▲▼ 호출 버튼
+  const px = hw + 0.36;
+  const wallZ = R_OUT - Math.sqrt(R_OUT * R_OUT - px * px); // 곡면 벽 위치
+  const panel = new THREE.Group();
+  panel.position.set(px, 0, wallZ);
+  panel.rotation.y = -Math.asin(px / R_OUT);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.6, 0.018), mat.panel);
+  plate.position.set(0, 1.28, 0.009);
+  plate.castShadow = plate.receiveShadow = true;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.165), indicatorMat);
+  screen.position.set(0, 1.45, 0.0215);
+  const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.124, 0.18, 0.004), new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.15, metalness: 0.2 }));
+  bezel.position.set(0, 1.45, 0.017);
+  panel.add(plate, bezel, screen);
+  const ringGeo = new THREE.CylinderGeometry(0.027, 0.027, 0.01, 24);
+  ringGeo.rotateX(Math.PI / 2);
+  const faceGeo = new THREE.CircleGeometry(0.02, 24);
+  const buttons = [];
+  for (const [dir, y] of [[1, 1.2], [-1, 1.115]]) {
+    if (dir > 0 && k === FLOORS - 1) continue; // 꼭대기 층: ▼만
+    if (dir < 0 && k === 0) continue;          // 1층: ▲만
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xbfc2c4, roughness: 0.25, metalness: 0.95, emissive: 0x000000 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.set(0, k === 0 || k === FLOORS - 1 ? 1.16 : y, 0.022);
+    const faceMat = new THREE.MeshBasicMaterial({ map: mat.callTex[dir > 0 ? 0 : 1] });
+    faceMat.color.setScalar(0.75);
+    const face = new THREE.Mesh(faceGeo, faceMat);
+    face.position.set(0, ring.position.y, 0.0275);
+    panel.add(ring, face);
+    buttons.push({ dir, ringMat, faceMat });
+  }
+  g.add(panel);
+  const setCall = (on) => {
+    for (const b of buttons) {
+      b.ringMat.emissive.setHex(on ? 0xff2a10 : 0x000000);
+      b.ringMat.emissiveIntensity = on ? 2.2 : 0;
+      b.faceMat.color.setRGB(on ? 1.6 : 0.75, on ? 0.45 : 0.75, on ? 0.35 : 0.75);
+    }
+  };
 
-  const btnPanel = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.26, 0.03), mat.frame);
-  btnPanel.position.set(hw + 0.32, 1.2, 0.03);
-  const btnMat = new THREE.MeshBasicMaterial({ color: 0x334433 });
-  const btn = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), btnMat);
-  btn.position.set(hw + 0.32, 1.2, 0.05);
-
-  g.add(pl, pr, lintel, left, right, ind, btnPanel, btn);
+  g.add(pl, pr, lintel, left, right);
   root.add(g);
   g.updateMatrixWorld(true);
   return {
-    k, group: g, left, right, btnMat, open: 0, target: 0,
+    k, group: g, left, right, setCall, open: 0, target: 0,
     doorPos: polar(R_OUT - 0.2, DOOR_ANGLE, y + 1.2, new THREE.Vector3()),
-    buttonPos: g.localToWorld(new THREE.Vector3(hw + 0.32, 1.2, 0.05)),
+    buttonPos: g.localToWorld(new THREE.Vector3(px, 1.2, wallZ + 0.05)),
   };
 }
 
