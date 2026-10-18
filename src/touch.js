@@ -56,7 +56,7 @@ export class TouchControls {
         return;
       }
       if (this.g.cctv) {
-        this.g.closeCctv();
+        this.g.cctvTap(e.clientX, e.clientY);
         return;
       }
       const left = e.clientX < window.innerWidth * 0.42;

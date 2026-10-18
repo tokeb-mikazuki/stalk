@@ -242,6 +242,27 @@
     #cctv .time { position: absolute; bottom: 18px; right: 22px; font-size: 16px; }
     #cctv .hint { position: absolute; bottom: 18px; left: 22px; font-size: 12px; opacity: .7; }
     #cctv::after { content: ''; position: absolute; inset: 12px; border: 2px solid rgba(200,255,210,.25); }
+    #cctv .cam em { font-style: normal; color: #ffe08a; }
+    #cctv .cam .arr { opacity: .55; font-size: 12px; }
+    #cctv .hint kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px solid rgba(207,232,208,.45); border-radius: 3px; margin: 0 1px; }
+    #cctv .hint.mob { display: none; }
+    body.touch #cctv .hint.pc { display: none; }
+    body.touch #cctv .hint.mob { display: block; }
+    #cctv .mot-tag { position: absolute; top: 46px; right: 22px; font-size: 14px; color: #ff4a4a; letter-spacing: 2px; display: none; animation: blink .6s steps(2) infinite; }
+    #cctv.mot .mot-tag { display: block; }
+    #cctv-grid { position: absolute; inset: 0; display: none; }
+    #cctv.grid #cctv-grid { display: grid; }
+    #cctv.grid .cam, #cctv.grid .mot-tag { display: none; }
+    #cctv.grid::after { display: none; }
+    #cctv.grid .rec { top: auto; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 14px; }
+    #cctv.grid .hint, #cctv.grid .time { background: rgba(0,0,0,.7); padding: 3px 8px; bottom: 8px; }
+    #cctv-grid .cc { position: relative; border: 1px solid rgba(200,255,210,.22); }
+    #cctv-grid .cc b { position: absolute; top: 5px; left: 7px; font-weight: 400; font-size: clamp(9px, 1vw, 13px); letter-spacing: 1px; }
+    #cctv-grid .cc i { position: absolute; bottom: 5px; left: 7px; font-style: normal; font-size: clamp(9px, .9vw, 12px); color: #ff4a4a; display: none; animation: blink .6s steps(2) infinite; }
+    #cctv-grid .cc em { position: absolute; top: 5px; right: 7px; font-style: normal; font-size: clamp(9px, .9vw, 12px); color: #ffe08a; display: none; }
+    #cctv-grid .cc.mot i, #cctv-grid .cc.here em { display: block; }
+    #cctv-grid .cc.mot { border-color: rgba(255,80,80,.7); }
+    #cctv-grid .cc.sel { border: 2px solid rgba(220,255,225,.9); box-shadow: inset 0 0 0 1px rgba(0,0,0,.6); }
     #toast { position: fixed; top: 18px; right: 18px; z-index: 70; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
     #toast div { display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; background: rgba(10,10,10,.94); border: 1px solid #2c2c2c; border-left: 3px solid var(--blood); color: #e0dccf; font-size: 13px; letter-spacing: .05em; animation: toastIn .4s ease both; transition: opacity .6s, transform .6s; }
     #toast div::before { content: '◆'; color: #e0313a; font-size: 14px; }
@@ -426,10 +447,12 @@
       <h4>생존 수칙</h4>
       <ul class="tips">
         <li><b>목표</b> — 꼭대기 층(악몽은 30층) 옥상 문을 열고 탈출한다.</li>
-        <li><b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 당신 쪽으로 걸어온다. 위층에서 내려오기도 한다.</li>
+        <li><b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 걸어온다. 위층에서 내려오기도 한다.</li>
+        <li>송신은 당신이 어디 있는지 <b>정확히 모른다</b>. 발소리·인기척·손전등 불빛으로 <b>몇 층쯤 위인지 아래인지</b>만 짐작해 그쪽으로 간다. 문을 닫고 숨으면 아무것도 모른다.</li>
         <li>엘리베이터 표시기는 <b>엘리베이터의 현재 층</b>을 보여준다. 송신이 엘리베이터에서 내리거나 타면 <b style="color:#ff5050">계단의 기척</b>으로 알 수 있다.</li>
-        <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.</li>
-        <li>비상실 안쪽 벽의 <b>CCTV 모니터</b>로 문 앞을 확인할 수 있다.</li>
+        <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 비상실은 매 판 <b>전체 층의 딱 절반</b>만 열려 있다. 들어가서 <b>문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.</li>
+        <li>비상실 안쪽 벽의 <b>CCTV 모니터</b>로 <b>모든 층</b>의 비상문 앞을 볼 수 있다. <kbd>A</kbd><kbd>D</kbd>·휠로 층 이동, <kbd>Space</kbd>로 전체 층을 한 화면에.</li>
+        <li>난이도가 오를수록 송신은 더 멀리서 듣고, 덜 헷갈리고, 오래 기억하며, 당신이 갈 곳을 앞질러 간다. 하드부터는 비상실 문에 귀를 대 보기도 한다.</li>
         <li>같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.</li>
         <li>엘리베이터 <b>호출 버튼</b>으로 엘리베이터를 부를 수 있다. 송신도 버튼을 눌러야 엘리베이터를 탈 수 있다.</li>
         <li>지금 몇 층인지는 벽에 칠해진 층 번호로만 알 수 있다.</li>
@@ -505,7 +528,10 @@
     <div class="rec">● REC</div>
     <div class="cam" id="cctv-cam">CAM</div>
     <div class="time" id="cctv-time"></div>
-    <div class="hint">[E] · 클릭 · 화면 터치 — CCTV 끄기</div>
+    <div class="mot-tag">● MOTION</div>
+    <div id="cctv-grid"></div>
+    <div class="hint pc"><kbd>A</kbd><kbd>D</kbd> · 휠 — 층 이동 &nbsp; <kbd>Space</kbd> — 전체 층 ↔ 한 층 &nbsp; <kbd>E</kbd> · 클릭 — 끄기</div>
+    <div class="hint mob">좌/우 끝 — 층 이동 · 위쪽 — 전체 층 · 가운데 — 끄기 (전체 화면: 칸을 눌러 선택)</div>
   </div>
   <div id="toast"></div>
   <div id="scare"><img alt="" /></div>

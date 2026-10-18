@@ -77,6 +77,8 @@ class Game {
     this.irLight = new THREE.PointLight(0xdde6ff, 0, 10, 1.4); // 적외선 조명 (CCTV 렌더 때만 켬)
     this.scene.add(this.irLight);
     this.cctv = null;
+    this.cctvGrid = null; // 전체 층 CCTV 화면 (HDR, 칸마다 돌아가며 갱신)
+    this.cctvDir = new THREE.Vector3();
     this.lampLights = [];
     for (let i = 0; i < 5; i++) {
       const l = new THREE.PointLight(0xffdcae, 0, 10, 1.7);
@@ -224,6 +226,19 @@ class Game {
         this.debugCount = 0;
       }
       if (this.state !== 'playing') return;
+      if (this.cctv) {
+        // CCTV: ←/→ 층 이동 (전체 보기에서는 ↑/↓ 로 한 줄), Space·Tab 전체 층 ↔ 한 층, Enter 선택한 층 크게
+        const c = e.code;
+        if (c === 'KeyA' || c === 'ArrowLeft') this.cctvStep(-1);
+        else if (c === 'KeyD' || c === 'ArrowRight') this.cctvStep(1);
+        else if (c === 'KeyW' || c === 'ArrowUp') this.cctvStep(this.cctv.grid ? this.cctvCols : 1);
+        else if (c === 'KeyS' || c === 'ArrowDown') this.cctvStep(this.cctv.grid ? -this.cctvCols : -1);
+        else if (c === 'Space' || c === 'Tab' || c === 'KeyQ') this.cctvToggle();
+        else if (c === 'Enter' || c === 'NumpadEnter') this.cctvSelect();
+        else if (c === 'KeyE') this.closeCctv();
+        e.preventDefault();
+        return;
+      }
       if (e.code === 'KeyE') this.interact();
       if (e.code === 'KeyF' && !this.hud.noteOpen) {
         if (this.player.toggleTorch()) this.audio.torchClick();
@@ -265,6 +280,9 @@ class Game {
         else this.hud.msg('배터리 없음', 1.8);
       }
     });
+    window.addEventListener('wheel', (e) => {
+      if (this.state === 'playing' && this.cctv && Math.abs(e.deltaY) > 2) this.cctvStep(e.deltaY > 0 ? -1 : 1);
+    }, { passive: true });
     canvas.addEventListener('click', () => {
       this.hud.clickHint.classList.remove('on');
       if (this.state === 'playing' && this.cctv) {
@@ -451,13 +469,21 @@ class Game {
     roof.pivot.rotation.y = 0;
   }
 
-  /** 이번 판에 잠긴 비상문 결정 (1F는 항상 잠김, 연속 두 층이 잠기지 않게) */
+  /** 이번 판에 열린 비상실 결정: 전체 층의 딱 절반만 열린다 (1F는 항상 잠김, 위아래로 고르게 흩어지게) */
   rollLocks() {
-    let prevLocked = true;
-    for (const d of this.world.fireDoors) {
-      const locked = d.k === 0 || (!prevLocked && Math.random() < this.diff.lockChance);
+    const doors = this.world.fireDoors;
+    const n = doors.length;
+    const open = Math.floor(n / 2);
+    const unlocked = new Set();
+    // 2F ~ 꼭대기 층을 open 개의 구간으로 나눠 구간마다 하나씩
+    for (let i = 0; i < open; i++) {
+      const lo = 1 + Math.floor((i * (n - 1)) / open);
+      const hi = Math.max(lo, Math.floor(((i + 1) * (n - 1)) / open));
+      unlocked.add(lo + Math.floor(Math.random() * (hi - lo + 1)));
+    }
+    for (const d of doors) {
+      const locked = !unlocked.has(d.k);
       d.locked = locked;
-      prevLocked = locked;
       d.exitSign.material = locked ? this.world.doorMats.exitOff : this.world.doorMats.exitOn;
       if (d.lamp.baseKind === undefined) d.lamp.baseKind = d.lamp.kind;
       d.lamp.kind = locked ? 'dead' : d.lamp.baseKind;
@@ -774,17 +800,16 @@ class Game {
   }
 
   // ------------------------------------------------------------------ CCTV
+  // 비상실 모니터로 모든 층의 비상문 앞을 볼 수 있다. 기본은 지금 있는 층, 전환하면 전체 층을 한 화면에.
   openCctv(door) {
-    this.cctv = { door, seen: 0, t: 0 };
-    this.cctvCam.position.copy(door.cctvPos);
-    this.cctvCam.lookAt(door.cctvTarget);
+    this.cctv = { door, k: door.k, sel: door.k, grid: false, seen: 0, t: 0, next: 0 };
     this.player.frozen = true;
     this.player.viewModel.visible = false;
     this.hud.show(false);
     this.hud.setPrompt('');
     document.getElementById('cctv').classList.add('on');
-    document.getElementById('cctv-cam').textContent = `CAM-${String(door.k + 1).padStart(2, '0')}F  비상문 앞`;
     this.post.uniforms.uCctv.value = 1;
+    this.setCctvView();
     this.audio.click(0.4);
   }
 
@@ -794,13 +819,178 @@ class Game {
     this.player.frozen = false;
     this.player.viewModel.visible = true;
     if (this.state === 'playing') this.hud.show(true);
-    document.getElementById('cctv').classList.remove('on');
+    const ov = document.getElementById('cctv');
+    ov.classList.remove('on', 'grid');
     this.post.uniforms.uCctv.value = 0;
+    this.post.uniforms.uWarp.value = 1;
+  }
+
+  camLabel(k) {
+    return `CAM-${String(k + 1).padStart(2, '0')}F`;
+  }
+
+  /** 한 층 / 전체 층 화면 전환 후 표시 갱신 */
+  setCctvView() {
+    const c = this.cctv;
+    document.getElementById('cctv').classList.toggle('grid', c.grid);
+    this.post.uniforms.uWarp.value = c.grid ? 0 : 1;
+    if (c.grid) {
+      this.buildCctvGrid();
+      c.next = 0;
+      c.fill = 0;
+    }
+    this.updateCctvLabels();
+  }
+
+  updateCctvLabels() {
+    const c = this.cctv;
+    const here = c.door.k;
+    const k = c.grid ? c.sel : c.k;
+    document.getElementById('cctv-cam').innerHTML =
+      `<span class="arr">◀</span> ${this.camLabel(k)}  비상문 앞${k === here ? ' <em>· 현재 층</em>' : ''} <span class="arr">▶</span>`;
+    if (this.cctvCells) this.cctvCells.forEach((el, i) => el.classList.toggle('sel', i === c.sel));
+  }
+
+  cctvStep(d) {
+    const c = this.cctv;
+    if (!c) return;
+    const n = this.world.fireDoors.length;
+    if (c.grid) c.sel = Math.max(0, Math.min(n - 1, c.sel + d));
+    else c.k = (((c.k + d) % n) + n) % n;
+    c.seen = 0;
+    this.audio.click(0.25);
+    this.updateCctvLabels();
+  }
+
+  cctvToggle() {
+    const c = this.cctv;
+    if (!c) return;
+    c.grid = !c.grid;
+    if (c.grid) c.sel = c.k;
+    else c.k = c.sel;
+    this.audio.click(0.4);
+    this.setCctvView();
+  }
+
+  cctvSelect() {
+    const c = this.cctv;
+    if (c?.grid) this.cctvToggle();
+  }
+
+  /** 터치: 전체 화면에서는 칸을 누르면 그 층, 한 층 화면에서는 좌/우 끝 = 층 이동, 위쪽 = 전체 보기, 가운데 = 끄기 */
+  cctvTap(x, y) {
+    const c = this.cctv;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (c.grid) {
+      const rows = Math.ceil(this.world.fireDoors.length / this.cctvCols);
+      const col = Math.floor((x / W) * this.cctvCols);
+      const row = rows - 1 - Math.floor((y / H) * rows);
+      const k = row * this.cctvCols + col;
+      if (k >= 0 && k < this.world.fireDoors.length) {
+        c.sel = k;
+        this.cctvToggle();
+      }
+      return;
+    }
+    if (y < H * 0.18) this.cctvToggle();
+    else if (x < W * 0.22) this.cctvStep(-1);
+    else if (x > W * 0.78) this.cctvStep(1);
+    else this.closeCctv();
+  }
+
+  /** 전체 층 화면 준비: 칸 배치 + 렌더 타깃 + 칸 라벨 */
+  buildCctvGrid() {
+    const n = this.world.fireDoors.length;
+    const cols = n <= 20 ? 5 : 6;
+    const rows = Math.ceil(n / cols);
+    this.cctvCols = cols;
+    const pr = Math.min(1, this.pixelRatio || 1);
+    const W = Math.min(1600, Math.floor(window.innerWidth * pr));
+    const H = Math.max(1, Math.floor((W * window.innerHeight) / window.innerWidth));
+    if (!this.cctvGrid) this.cctvGrid = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType });
+    else this.cctvGrid.setSize(W, H);
+    this.cctvGridLayout = { cols, rows, cw: Math.floor(W / cols), ch: Math.floor(H / rows) };
+    // 한 번 전체를 검게 지운다
+    const r = this.renderer;
+    this.cctvGrid.scissorTest = false;
+    this.cctvGrid.viewport.set(0, 0, W, H);
+    r.setRenderTarget(this.cctvGrid);
+    r.clear();
+    r.setRenderTarget(null);
+
+    const box = document.getElementById('cctv-grid');
+    if (box.childElementCount !== n || box.dataset.cols !== String(cols)) {
+      box.innerHTML = '';
+      box.dataset.cols = String(cols);
+      box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      box.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+      this.cctvCells = [];
+      for (let k = 0; k < n; k++) {
+        const el = document.createElement('div');
+        el.className = 'cc';
+        el.style.gridColumn = String((k % cols) + 1);
+        el.style.gridRow = String(rows - Math.floor(k / cols)); // 1층이 맨 아래 줄
+        el.innerHTML = `<b>${this.camLabel(k)}</b><i>● MOTION</i><em>현재 층</em>`;
+        box.appendChild(el);
+        this.cctvCells.push(el);
+      }
+    }
+    const here = this.cctv.door.k;
+    this.cctvCells.forEach((el, k) => el.classList.toggle('here', k === here));
+  }
+
+  /** 층 k 카메라에 송신이 비치는지 */
+  cctvSees(k) {
+    const s = this.stalker;
+    if (!s.visible || Math.abs(s.floor - k) > 1) return false;
+    const d = this.world.fireDoors[k];
+    const to = s.pos.clone().sub(d.cctvPos);
+    const len = to.length();
+    if (len > 10) return false;
+    this.cctvDir.copy(d.cctvTarget).sub(d.cctvPos).normalize();
+    return this.cctvDir.dot(to.multiplyScalar(1 / len)) > 0.55;
+  }
+
+  /** 층 k 의 CCTV 카메라 + 적외선 조명 배치 */
+  aimCctv(k, aspect) {
+    const d = this.world.fireDoors[k];
+    this.cctvCam.position.copy(d.cctvPos);
+    this.cctvCam.lookAt(d.cctvTarget);
+    this.cctvCam.aspect = aspect;
+    this.cctvCam.updateProjectionMatrix();
+    this.irLight.position.copy(d.cctvPos);
+  }
+
+  /** 전체 층 화면: 매 프레임 몇 칸씩 돌아가며 다시 그린다 (낮은 프레임의 감시 화면 느낌) */
+  renderCctvGrid() {
+    const c = this.cctv;
+    const { cols, cw, ch } = this.cctvGridLayout;
+    const n = this.world.fireDoors.length;
+    const per = c.fill < n ? 6 : this.settings.q === 'low' ? 2 : 4;
+    const r = this.renderer, rt = this.cctvGrid;
+    const vm = this.player.viewModel.visible;
+    this.player.viewModel.visible = false;
+    this.irLight.intensity = 3.5;
+    for (let i = 0; i < per; i++) {
+      const k = c.next;
+      c.next = (c.next + 1) % n;
+      c.fill++;
+      const x = (k % cols) * cw, y = Math.floor(k / cols) * ch;
+      this.aimCctv(k, cw / ch);
+      rt.viewport.set(x, y, cw, ch);
+      rt.scissor.set(x, y, cw, ch);
+      rt.scissorTest = true;
+      r.setRenderTarget(rt);
+      r.render(this.scene, this.cctvCam);
+    }
+    r.setRenderTarget(null);
+    this.irLight.intensity = 0;
+    this.player.viewModel.visible = vm;
   }
 
   /** 비상실 모니터 화면 + CCTV 감시 판정 */
   updateCctv(dt) {
-    const p = this.player, s = this.stalker;
+    const p = this.player;
     const door = p.inRoom ? this.world.fireDoors[p.roomK] : null;
     if (this.cctv && (!door || door !== this.cctv.door)) this.closeCctv();
     for (const d of this.world.fireDoors) {
@@ -811,35 +1001,36 @@ class Game {
       d.screenMat.color.setScalar(d === door ? 1.5 : 0.02);
     }
     if (!door) return;
-    // 모니터 화면에 실시간 영상
-    this.cctvCam.position.copy(door.cctvPos);
-    this.cctvCam.lookAt(door.cctvTarget);
     door.recMat.color.setHex(Math.sin(this.time * 6) > 0 ? 0xff2020 : 0x330000);
-    const vm = p.viewModel.visible;
-    p.viewModel.visible = false;
-    this.irLight.position.copy(door.cctvPos);
-    this.irLight.intensity = 3.5;
-    door.screen.visible = false;
-    this.cctvCam.aspect = 4 / 3;
-    this.cctvCam.updateProjectionMatrix();
-    this.renderer.setRenderTarget(this.cctvTarget);
-    this.renderer.render(this.scene, this.cctvCam);
-    this.renderer.setRenderTarget(null);
-    door.screen.visible = true;
-    this.irLight.intensity = 0;
-    p.viewModel.visible = vm;
+    if (!this.cctv) {
+      // 모니터 화면에 지금 층 문 앞 실시간 영상
+      const vm = p.viewModel.visible;
+      p.viewModel.visible = false;
+      this.aimCctv(door.k, 4 / 3);
+      this.irLight.intensity = 3.5;
+      door.screen.visible = false;
+      this.renderer.setRenderTarget(this.cctvTarget);
+      this.renderer.render(this.scene, this.cctvCam);
+      this.renderer.setRenderTarget(null);
+      door.screen.visible = true;
+      this.irLight.intensity = 0;
+      p.viewModel.visible = vm;
+      return;
+    }
 
-    if (this.cctv) {
-      this.cctv.t += dt;
-      document.getElementById('cctv-time').textContent = new Date(Date.now()).toLocaleTimeString('ko-KR', { hour12: false });
-      // 송신이 문 앞에 비치는지
-      if (s.visible) {
-        const to = s.pos.clone().sub(this.cctvCam.position);
-        const fwd = this.cctvCam.getWorldDirection(new THREE.Vector3());
-        if (to.length() < 10 && fwd.dot(to.normalize()) > 0.55) {
-          this.cctv.seen += dt;
-          if (this.cctv.seen > 1) this.progress.unlock('watcher');
-        }
+    const c = this.cctv;
+    c.t += dt;
+    document.getElementById('cctv-time').textContent = new Date(Date.now()).toLocaleTimeString('ko-KR', { hour12: false });
+    const ov = document.getElementById('cctv');
+    if (c.grid) {
+      this.cctvCells.forEach((el, k) => el.classList.toggle('mot', this.cctvSees(k)));
+      ov.classList.remove('mot');
+    } else {
+      const seen = this.cctvSees(c.k);
+      ov.classList.toggle('mot', seen);
+      if (seen) {
+        c.seen += dt;
+        if (c.seen > 1) this.progress.unlock('watcher');
       }
     }
   }
@@ -1035,13 +1226,17 @@ class Game {
     this.hud.update(dt);
     this.glitch = Math.max(0, this.glitch - dt * 1.6);
     u.uGlitch.value = this.glitch;
-    if (this.cctv) {
-      this.irLight.position.copy(this.cctvCam.position);
+    if (this.cctv && this.cctv.grid) {
+      this.renderCctvGrid();
+      this.post.render(null, null, this.cctvGrid.texture);
+    } else if (this.cctv) {
+      this.aimCctv(this.cctv.k, this.camera.aspect);
       this.irLight.intensity = 3.5;
       this.player.viewModel.visible = false;
-      this.cctvCam.aspect = this.camera.aspect;
-      this.cctvCam.updateProjectionMatrix();
+      const screen = this.world.fireDoors[this.cctv.door.k].screen;
+      screen.visible = false;
       this.post.render(this.scene, this.cctvCam);
+      screen.visible = true;
       this.irLight.intensity = 0;
     } else {
       this.post.render(this.scene, this.camera);
@@ -1119,7 +1314,7 @@ class Game {
       else this.hud.msg('넘어졌다', 1.8);
       this.glitchPulse(0.35);
     }
-    if (p.inRoom) this.hint('room', '[E] 문 닫기 → 송신이 못 들어옴 · 오래 숨으면 들킨다 · 모니터 = CCTV', 4.5);
+    if (p.inRoom) this.hint('room', '[E] 문 닫기 → 송신이 못 들어옴 · 오래 숨으면 들킨다 · 모니터 = 전 층 CCTV', 4.5);
 
 
     this.elevator.update(dt);
@@ -1429,7 +1624,10 @@ const LOADING_TIPS = [
   '엘리베이터 표시기는 엘리베이터가 지금 몇 층에 있는지 보여준다.',
   '송신이 엘리베이터에서 내리면, 계단에서 기척이 느껴진다.',
   '초록 비상구 표시등이 켜진 문 안으로 숨을 수 있다. 문은 꼭 닫아라.',
-  '비상실 안의 CCTV로 문 앞에 무엇이 있는지 확인할 수 있다.',
+  '비상실 CCTV로 모든 층의 문 앞을 볼 수 있다. Space를 누르면 전체 층이 한 화면에.',
+  '송신은 당신이 어디 있는지 모른다. 소리와 불빛으로 위인지 아래인지 짐작할 뿐이다.',
+  '멈춰 서 있으면 발소리가 나지 않는다. 송신은 웅크린 발소리도 잘 듣지 못한다.',
+  '비상실은 매번 절반만 열려 있다. 초록 표시등을 찾아라.',
   '같은 층에 오래 머물면 조명이 깜빡이기 시작한다. 그건 경고다.',
   '달리면 빠르지만, 발소리는 계단 전체에 울린다.',
   '손전등 빛은 멀리서도 보인다. 하지만 끄면 아무것도 보이지 않는다.',

@@ -127,6 +127,14 @@ export function inRoomArea(lx, lz, pad = 0.28) {
 }
 
 // 난이도: 캐주얼 / 노말 / 하드 / 악몽(30층, 하드 클리어 시 해금)
+// ai: 송신의 지능
+//   hear      — 계단에서 플레이어의 기척(발소리·움직임)을 느끼는 거리(m). 정확한 위치가 아니라 '위/아래, 대략 몇 층'만 안다
+//   floorErr  — 짐작한 층의 오차(층)
+//   memory    — 마지막 기척을 기억하는 시간(s)
+//   predict   — 플레이어가 움직이는 방향을 내다보는 정도 (0~1)
+//   checkRooms— 놓친 층의 비상실 문 앞을 확인하는지
+//   patience  — 엘리베이터를 기다리는 한계(s)
+//   lightSense— 손전등 빛을 위아래 층에서 알아채는 범위(층)
 // ---------- 엘리베이터 문 로컬 좌표 (원점 = 엘리베이터 문 중앙, +z = 계단 안쪽) ----------
 const EC = Math.cos(DOOR_ANGLE), ES = Math.sin(DOOR_ANGLE);
 const EX = R_OUT * EC, EZ = R_OUT * ES;
@@ -157,6 +165,7 @@ export const DIFFICULTY_ORDER = ['casual', 'normal', 'hard', 'nightmare'];
 export const DIFFICULTY = {
   casual: {
     label: '캐주얼',
+    ai: { hear: 22, floorErr: 2.2, memory: 14, predict: 0, checkRooms: false, patience: 26, lightSense: 0 },
     floors: 20,
     chaseSpeed: 3.4,         // 추격 속도(m/s) — 걷기(2.9)보다 빠르고 달리기(5.4)보다 느림
     chaseSpeedPerFloor: 0.02,
@@ -173,7 +182,6 @@ export const DIFFICULTY = {
     hearingMul: 0.8,
     batteryDrain: 0.9,       // 손전등 배터리 소모(%/s)
     batteries: 12,
-    lockChance: 0.15,
     indicatorGlitch: 0.15,
     eventMin: 26, eventMax: 50,
     tripChance: 0.03,
@@ -182,6 +190,7 @@ export const DIFFICULTY = {
   },
   normal: {
     label: '노말',
+    ai: { hear: 36, floorErr: 1.2, memory: 24, predict: 0.3, checkRooms: false, patience: 22, lightSense: 1 },
     floors: 20,
     chaseSpeed: 3.9,
     chaseSpeedPerFloor: 0.03,
@@ -198,7 +207,6 @@ export const DIFFICULTY = {
     hearingMul: 1.0,
     batteryDrain: 1.5,
     batteries: 11,
-    lockChance: 0.25,
     indicatorGlitch: 0.3,
     eventMin: 20, eventMax: 40,
     tripChance: 0.06,
@@ -207,6 +215,7 @@ export const DIFFICULTY = {
   },
   hard: {
     label: '하드',
+    ai: { hear: 52, floorErr: 0.6, memory: 38, predict: 0.7, checkRooms: true, patience: 16, lightSense: 1.5 },
     floors: 20,
     chaseSpeed: 4.4,
     chaseSpeedPerFloor: 0.035,
@@ -223,7 +232,6 @@ export const DIFFICULTY = {
     hearingMul: 1.25,
     batteryDrain: 2.0,
     batteries: 9,
-    lockChance: 0.33,
     indicatorGlitch: 0.4,
     eventMin: 14, eventMax: 30,
     tripChance: 0.08,
@@ -232,6 +240,7 @@ export const DIFFICULTY = {
   },
   nightmare: {
     label: '악몽',
+    ai: { hear: 75, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2 },
     floors: 30,
     chaseSpeed: 4.8,
     chaseSpeedPerFloor: 0.02,  // 꼭대기에서는 거의 달리기 속도
@@ -248,7 +257,6 @@ export const DIFFICULTY = {
     hearingMul: 1.5,
     batteryDrain: 2.6,
     batteries: 8,
-    lockChance: 0.42,
     indicatorGlitch: 0.6,      // 표시기를 믿기 어렵다
     eventMin: 9, eventMax: 20,
     tripChance: 0.1,

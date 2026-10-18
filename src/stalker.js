@@ -1,8 +1,12 @@
 // 송신 — 엘리베이터로 아무 층에나 내려, 계단을 따라 플레이어에게 다가오는 존재
 //
 // 송신은 평면(앞: 얼굴 / 뒤: 머리카락 실루엣)이며 항상 "자기가 걸어가는 방향"을 바라본다.
-// 상태: elevator → arriving → approach | wander → chase → (lost | search | vanish) → toElevator → waitCar → elevator ...
+// 상태: elevator → arriving → approach | wander → linger → chase → (lost | search | vanish) → toElevator → waitCar → elevator ...
 // 엘리베이터는 플레이어와 함께 쓰는 실제 한 대(elevator.js)라서, 버튼을 누르고 올 때까지 기다려야 탈 수 있다.
+//
+// 송신은 플레이어의 정확한 위치를 모른다. 소리·인기척·손전등 불빛으로 "몇 층쯤 위/아래"를 짐작(belief)할 뿐이며,
+// 문을 닫고 비상실에 숨거나 엘리베이터 안에 있으면 아무것도 느끼지 못한다. 눈으로 보면(detect) 그때부터 추격.
+// 난이도가 오를수록 더 멀리서 듣고, 오차가 적고, 오래 기억하고, 플레이어가 갈 곳을 앞질러 간다 (config.js 의 ai).
 import * as THREE from 'three';
 import {
   FLOORS, FLOOR_H, FLOOR_PHI, R_MID, R_OUT, DOOR_ANGLE, PHI_MIN, PHI_MAX, CORR_L,
@@ -13,6 +17,11 @@ import { silhouetteTexture } from './textures.js';
 
 const HEIGHT = 1.9;
 const DOOR_FRONT_R = R_OUT - 0.45;
+
+/** 대략 정규분포 (-2.1 ~ 2.1) */
+function gauss() {
+  return (Math.random() + Math.random() + Math.random() - 1.5) * 1.4;
+}
 
 function wrapPi(a) {
   a = (a + Math.PI) % (Math.PI * 2);
@@ -77,6 +86,10 @@ export class Stalker {
     this.jitter = 0;
     this.windup = 0;
     this.justSpotted = false;
+    // 짐작: 시작할 때는 플레이어가 1층에 있다는 것만 안다
+    this.belief = { phi: landingCenter(0), t: 0, vel: 0, fresh: 0, truePhi: landingCenter(0) };
+    this.senseT = 0;
+    this.inspectK = -1;
     this.group.visible = false;
   }
 
@@ -222,16 +235,91 @@ export class Stalker {
     return Math.max(0, Math.min(1, player.floor / Math.max(1, FLOORS - 1)));
   }
 
-  pickElevatorTarget(playerFloor) {
+  // ------------------------------------------------------------------ 짐작 (소리·인기척·불빛)
+  /** 지금 있는 층 (엘리베이터 안이면 엘리베이터 위치) */
+  get senseFloor() {
+    return this.state === 'elevator' ? Math.round(this.elevFloor) : this.floor;
+  }
+
+  /** 플레이어가 대략 어디 있는지 느낀다. 매 0.4초 */
+  sense(player, dt) {
+    const ai = this.diff.ai;
+    const b = this.belief;
+    b.t += dt;
+    b.fresh = Math.max(0, b.fresh - dt);
+    this.senseT -= dt;
+    if (this.senseT > 0) return;
+    this.senseT = 0.4;
+    if (player.inCar) return;                                                         // 엘리베이터 안 = 모른다
+    if (player.inRoom && this.game.world.fireDoors[player.roomK].open < 0.3) return;  // 문 닫고 숨으면 모른다
+    if (this.state === 'trapWait' || this.state === 'chase') return;
+    const src = this.state === 'elevator' ? this.humPos : this.pos;
+    const py = player.footY + 1;
+    const d = Math.hypot(src.x - player.x, src.y - py, src.z - player.z);
+    const sharp = 1 + 0.3 * this.heightRatio(player);
+    const hearR = ai.hear * (player.noise / 8.5) * sharp; // 걷기 8.5 기준, 뛰면 2배, 웅크리면 0.4배, 멈추면 0
+    const lit = player.torchOn && Math.abs(player.floor - this.senseFloor) <= ai.lightSense;
+    if (d > Math.max(hearR, 5) && !lit) return;
+    // 정확한 위치가 아니라 "몇 층쯤 위/아래" — 층 차이가 클수록 오차도 크다
+    const pPhi = player.inRoom ? fireDoorPhi(player.roomK) : player.phi;
+    const dFloors = Math.abs(py - src.y) / FLOOR_H;
+    const err = ai.floorErr * Math.min(1, 0.2 + dFloors / 4) * gauss() * FLOOR_PHI;
+    const guess = pPhi + err;
+    if (b.t < 3) {
+      // 연속으로 들리면 움직이는 방향(오르는 중인지 내려가는 중인지)도 안다
+      const v = (pPhi - b.truePhi) / Math.max(0.2, b.t);
+      b.vel = b.vel * 0.6 + v * 0.4;
+      b.phi = b.phi * 0.5 + guess * 0.5;
+    } else {
+      b.vel = 0;
+      b.phi = guess;
+    }
+    b.truePhi = pPhi;
+    b.t = 0;
+    b.fresh = 0.6;
+  }
+
+  /** 짐작한 목표 지점 (똑똑할수록 플레이어가 향하는 쪽을 앞질러 간다). 잊어버렸으면 null */
+  beliefTarget() {
+    const b = this.belief, ai = this.diff.ai;
+    if (b.t > ai.memory) return null;
+    const lim = 1.5 * FLOOR_PHI;
+    const lead = Math.max(-lim, Math.min(lim, b.vel * ai.predict * (5 + b.t)));
+    return Math.max(PHI_MIN, Math.min(PHI_MAX, b.phi + lead));
+  }
+
+  beliefFloor() {
+    const t = this.beliefTarget();
+    return t === null ? null : Math.max(0, Math.min(FLOORS - 1, floorIndex(t)));
+  }
+
+  forget() {
+    this.belief.t = 1e9;
+  }
+
+  /** 방금 무언가를 느꼈고, 계단으로 갈 만큼 가까운가 */
+  freshNearby() {
+    if (this.belief.fresh <= 0) return false;
+    const bf = this.beliefFloor();
+    const reach = 1 + Math.round(this.diff.ai.predict * 2); // 캐주얼·노말 1층, 하드 2층, 악몽 3층 이내면 걸어서
+    return bf !== null && Math.abs(bf - this.senseFloor) <= reach;
+  }
+
+  pickElevatorTarget(player) {
     const cur = Math.round(this.elevFloor);
+    const bf = this.beliefFloor();
+    const b = this.belief, ai = this.diff.ai;
+    // 높은 층일수록 플레이어 쪽으로 올 확률이 조금 더 높다
+    const weight = Math.min(0.98, this.diff.elevatorWeight + 0.08 * this.heightRatio(player));
     let t = cur;
     for (let i = 0; i < 12 && t === cur; i++) {
-      // 높은 층일수록 플레이어 쪽으로 올 확률이 조금 더 높다
-      const weight = Math.min(0.98, this.diff.elevatorWeight + 0.08 * (playerFloor / Math.max(1, FLOORS - 1)));
-      if (Math.random() < weight) {
-        // 플레이어가 있는 곳으로 — 주로 바로 위층에 내려 계단을 따라 내려온다
-        const offs = [1, 1, 1, 2, 2, 3, -1, -1, -2, 0];
-        t = playerFloor + offs[Math.floor(Math.random() * offs.length)];
+      if (bf !== null && Math.random() < weight) {
+        // 짐작한 곳으로 — 주로 바로 위층에 내려 계단을 따라 내려온다. 똑똑하면 오르는 방향 앞쪽에 내린다
+        const offs = ai.predict >= 0.7 ? [1, 1, 1, 2, 0, -1] : [1, 1, 1, 2, 2, 3, -1, -1, -2, 0];
+        t = bf + offs[Math.floor(Math.random() * offs.length)];
+      } else if (bf === null && b.t < ai.memory * 2.5 && Math.random() < weight * 0.6) {
+        // 잊어 가는 중: 마지막으로 느꼈던 언저리 아무 데나
+        t = floorIndex(b.phi) + Math.round(gauss() * 2.5);
       } else {
         t = Math.floor(Math.random() * FLOORS);
       }
@@ -381,6 +469,8 @@ export class Stalker {
     this.stateTime += dt;
     this.justSpotted = false;
     this.glitchT = Math.max(0, this.glitchT - dt);
+    const ai = diff.ai;
+    this.sense(player, dt);
     const elevs = game.world.elevators;
     const prev = this.worldXZ();
     const px = prev.x, pz = prev.z;
@@ -402,9 +492,16 @@ export class Stalker {
           break;
         }
         if (!this.rideSent) {
-          if (this.elevTarget === null || this.elevTarget === undefined) this.elevTarget = this.pickElevatorTarget(player.floor);
+          if (this.elevTarget === null || this.elevTarget === undefined) this.elevTarget = this.pickElevatorTarget(player);
           this.rideSent = true;
           el.send(this.elevTarget);
+        } else if (!this.hunting && ai.predict >= 0.7 && this.belief.fresh > 0) {
+          // (하드 이상) 가는 도중에 소리가 들리면 행선지를 바꾼다
+          const bf = this.beliefFloor();
+          if (bf !== null && Math.abs(bf + 1 - this.elevTarget) >= 2) {
+            this.elevTarget = Math.min(FLOORS - 1, bf + 1);
+            el.send(this.elevTarget);
+          }
         }
         break;
       }
@@ -419,8 +516,8 @@ export class Stalker {
             el.occupant = null;
             el.speedMul = 1;
             if (this.hunting || this.detect(player)) this.beginChase();
-            else if (Math.random() < 0.8) this.setState('approach');
-            else this.pickWander(player);
+            else if (this.beliefTarget() !== null) this.setState('approach');
+            else this.pickWander();
           }
         }
         break;
@@ -434,21 +531,72 @@ export class Stalker {
       }
 
       case 'approach': {
-        // 플레이어가 있는 쪽으로 계단을 따라 걸어온다 (아직 발견하지는 못함)
+        // 소리가 난 쪽(짐작한 곳)으로 계단을 따라 간다 — 플레이어를 보고 있는 것은 아니다
         this.visible = true;
-        const res = this.goToPlayer(player, diff.approachSpeed, dt, game);
-        if (res === 'blocked') this.beginSearch();
-        else if (this.detect(player)) this.beginChase();
+        if (this.roomK >= 0) {
+          this.exitRoomStep(diff.approachSpeed, dt, game);
+          if (this.detect(player)) this.beginChase();
+          break;
+        }
+        const tPhi = this.beliefTarget();
+        if (tPhi === null) {
+          this.pickWander();
+          break;
+        }
+        const wob = Math.sin(this.t * 0.7) * 0.3;
+        const rem = this.moveToward(tPhi, R_MID + wob, diff.approachSpeed, dt);
+        if (this.detect(player)) this.beginChase();
+        else if (rem < 0.6) this.arriveAtBelief(game);
         else if (this.stateTime > 50) this.goElevator(game);
+        break;
+      }
+
+      case 'linger': {
+        // 짐작한 곳에 왔는데 아무도 없다 — 잠시 두리번거린다. (하드 이상) 이 층 비상실 문에 귀를 댄다
+        this.visible = true;
+        const k = this.inspectK;
+        if (k >= 0) {
+          const door = game.world.fireDoors[k];
+          const rem = this.moveToward(fireDoorPhi(k), DOOR_FRONT_R - 0.2, diff.roamSpeed * 1.3, dt);
+          if (rem < 0.3) {
+            const w = this.worldXZ();
+            face = Math.atan2(door.pos.x - w.x, door.pos.z - w.z);
+            this.timer -= dt;
+            if (this.timer <= 0) {
+              this.inspectK = -1;
+              this.timer = 1.5 + Math.random() * 1.5;
+              // 문 너머 숨소리를 들을 수도 있다
+              if (player.inRoom && player.roomK === k && Math.random() < ai.predict * 0.6) {
+                this.doorK = k;
+                this.beginSearch();
+                break;
+              }
+            }
+          }
+        } else {
+          face = this.yaw + Math.sin(this.stateTime * 1.7) * 0.9 * dt * 6;
+          this.timer -= dt;
+          if (this.timer <= 0) {
+            if (Math.random() < 0.5) this.pickWander();
+            else this.goElevator(game);
+          }
+        }
+        if (this.detect(player)) this.beginChase();
+        else if (this.stateTime > 0.5 && this.freshNearby() && Math.abs(this.beliefTarget() - this.phi) * R_MID > 4) this.setState('approach');
         break;
       }
 
       case 'wander': {
         this.visible = true;
+        if (this.roomK >= 0) {
+          this.exitRoomStep(diff.roamSpeed * 1.5, dt, game);
+          break;
+        }
         const wob = Math.sin(this.t * 0.7) * 0.35;
         const rem = this.moveToward(this.roamTarget, R_MID + wob, diff.roamSpeed, dt);
         if (rem < 0.25) this.goElevator(game);
         if (this.detect(player)) this.beginChase();
+        else if (this.freshNearby()) this.setState('approach');
         break;
       }
 
@@ -467,6 +615,7 @@ export class Stalker {
           this.setState('waitCar');
         }
         if (this.detect(player)) this.beginChase();
+        else if (this.freshNearby()) this.setState('approach');
         break;
       }
 
@@ -492,13 +641,15 @@ export class Stalker {
           this.moveToward(tPhi, R_OUT - 0.55, 0.5, dt);
           face = Math.atan2(Math.cos(tPhi), Math.sin(tPhi)); // 문을 바라보며 기다림
           el.call(k, 'stalker');
-          if (this.stateTime > 22) {
+          if (this.stateTime > ai.patience) {
             // 기다리다 지쳐 계단으로
-            this.setState('approach');
+            if (this.beliefTarget() !== null) this.setState('approach');
+            else this.pickWander();
             break;
           }
         }
         if (this.r < R_OUT - 0.2 && this.detect(player)) this.beginChase();
+        else if (this.r < R_OUT - 0.2 && this.freshNearby()) this.setState('approach');
         break;
       }
 
@@ -536,7 +687,13 @@ export class Stalker {
         this.loseTime = d > 22 && !player.inRoom ? this.loseTime + dt : 0;
         if (this.loseTime > 3.5) {
           this.burst = false;
-          this.goElevator(game);
+          // 놓쳤다. 마지막으로 본 곳은 안다 — 똑똑하면 그 근처를 뒤진다
+          const b = this.belief;
+          b.phi = b.truePhi = player.inRoom ? fireDoorPhi(player.roomK) : player.phi;
+          b.vel = 0;
+          b.t = 0;
+          if (ai.checkRooms) this.setState('approach');
+          else this.goElevator(game);
           game.onChaseEnd?.('lost');
         } else if (this.chaseTime > diff.chaseMax && d > 5 && !this.burst) {
           this.setState('vanish');
@@ -604,15 +761,27 @@ export class Stalker {
     this.updateMesh(dt);
   }
 
-  pickWander(player) {
+  /** 이웃 층으로 어슬렁 (짐작이 남아 있으면 그쪽으로) */
+  pickWander() {
     const k = floorIndex(this.phi);
+    const bf = this.beliefFloor() ?? (this.belief.t < this.diff.ai.memory * 2.5 ? floorIndex(this.belief.phi) : null);
     let t = k;
     while (t === k) {
-      const toward = Math.sign(player.floor - k) || (Math.random() < 0.5 ? 1 : -1);
+      const toward = (bf !== null && Math.sign(bf - k)) || (Math.random() < 0.5 ? 1 : -1);
       t = Math.max(0, Math.min(FLOORS - 1, k + (Math.random() < 0.7 ? toward : -toward)));
     }
     this.roamTarget = landingCenter(t);
     this.setState('wander');
+  }
+
+  /** 짐작한 곳에 도착했는데 보이지 않는다 */
+  arriveAtBelief(game) {
+    this.forget();
+    const k = floorIndex(this.phi);
+    const door = game.world.fireDoors[k];
+    this.inspectK = this.diff.ai.checkRooms && door && !door.locked && k > 0 ? k : -1;
+    this.timer = this.inspectK >= 0 ? 2.5 + Math.random() * 2 : 2 + Math.random() * 2.5;
+    this.setState('linger');
   }
 
   beginSearch() {

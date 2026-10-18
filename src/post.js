@@ -39,7 +39,7 @@ uniform sampler2D tDiffuse;
 uniform sampler2D tBloom;
 uniform float uBloom;
 uniform vec2 uRes;
-uniform float uTime, uFear, uRed, uGlitch, uFade, uFlash, uSat, uExposure, uGamma, uCctv;
+uniform float uTime, uFear, uRed, uGlitch, uFade, uFlash, uSat, uExposure, uGamma, uCctv, uWarp;
 varying vec2 vUv;
 
 float rand(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -60,7 +60,7 @@ void main() {
 
   // CCTV: 어안 렌즈 왜곡
   vec2 d0 = uv - 0.5;
-  uv = mix(uv, 0.5 + d0 * (1.0 - 0.18 * dot(d0, d0) * 4.0), uCctv);
+  uv = mix(uv, 0.5 + d0 * (1.0 - 0.18 * dot(d0, d0) * 4.0), uCctv * uWarp);
   vec2 d = uv - 0.5;
   float ca = 0.0015 + 0.006 * uFear + 0.025 * uGlitch;
   vec3 col;
@@ -137,6 +137,7 @@ export class Post {
       uExposure: { value: 0.78 },
       uGamma: { value: 1 },
       uCctv: { value: 0 },
+      uWarp: { value: 1 }, // CCTV 어안 왜곡 (전체 층 화면에서는 끔)
     };
     const quadMat = (fragmentShader, uniforms) => new THREE.ShaderMaterial({ uniforms, vertexShader: vert, fragmentShader, depthTest: false, depthWrite: false });
     this.finalMat = quadMat(frag, this.uniforms);
@@ -177,10 +178,16 @@ export class Post {
     this.renderer.render(this.scene, this.cam);
   }
 
-  render(scene, camera) {
+  /** 장면을 그려 후처리. source 를 주면 장면 대신 그 HDR 텍스처(CCTV 전체 층 화면)를 후처리한다 */
+  render(scene, camera, source = null) {
     const r = this.renderer;
-    r.setRenderTarget(this.target);
-    r.render(scene, camera);
+    const src = source || this.target.texture;
+    this.uniforms.tDiffuse.value = src;
+    this.brightMat.uniforms.tDiffuse.value = src;
+    if (!source) {
+      r.setRenderTarget(this.target);
+      r.render(scene, camera);
+    }
     if (this.bloomOn) {
       // 밝은 부분 → 1/4 해상도에서 두 번 블러
       this.pass(this.brightMat, this.bloomA);
