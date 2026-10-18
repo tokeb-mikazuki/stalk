@@ -1,8 +1,8 @@
-// 공포의 송신계단 - 공용 상수와 계단 수학
+// 공포의 채널유기 - 공용 상수와 계단 수학
 //
 // 계단은 중앙이 뚫린 나선형 계단이다. 한 층 = 두 바퀴(TURNS × 2π).
 // 한 층은 [계단참(LANDING) | 계단(STAIR_ARC)] 으로 구성된다.
-// 플레이어와 송신의 위치는 "펼친 각도" phi 와 반지름 r 로 표현한다.
+// 플레이어와 피구공의 위치는 "펼친 각도" phi 와 반지름 r 로 표현한다.
 // 계단참 바깥 벽의 비상문 너머에는 숨을 수 있는 방(복도 + 방)이 있다.
 
 export const TAU = Math.PI * 2;
@@ -69,7 +69,7 @@ export function stepTopY(phi) {
   return k * FLOOR_H + (i + 1) * RISE;
 }
 
-/** 매끄러운 기준 높이 (난간, 하부 슬래브, 송신 이동에 사용) */
+/** 매끄러운 기준 높이 (난간, 하부 슬래브, 피구공 이동에 사용) */
 export function baseY(phi) {
   const k = Math.floor(phi / FLOOR_PHI);
   const a = phi - k * FLOOR_PHI;
@@ -127,7 +127,7 @@ export function inRoomArea(lx, lz, pad = 0.28) {
 }
 
 // 난이도: 캐주얼 / 노말 / 하드 / 악몽(30층, 하드 클리어 시 해금)
-// ai: 송신의 지능
+// ai: 피구공의 지능
 //   hear      — 계단에서 플레이어의 기척(발소리·움직임)을 느끼는 거리(m). 정확한 위치가 아니라 '위/아래, 대략 몇 층'만 안다
 //   floorErr  — 짐작한 층의 오차(층)
 //   memory    — 마지막 기척을 기억하는 시간(s)
@@ -245,7 +245,7 @@ export const DIFFICULTY = {
   nightmare: {
     label: '악몽',
     keyRequired: true, // 옥상 문 열쇠 (엘리베이터 안 또는 25~30층 열린 비상실)
-    strictLinger: true, // 송신이 바로 위·아래 층에 있어도 같은 층 체류 시간이 흐른다 (다른 난이도는 멈춘다)
+    strictLinger: true, // 피구공이 바로 위·아래 층에 있어도 같은 층 체류 시간이 흐른다 (다른 난이도는 멈춘다)
     ai: { hear: 62, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2, calm: 12 },
     floors: 30,
     chaseSpeed: 4.8,

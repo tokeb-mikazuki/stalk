@@ -1,11 +1,12 @@
-// 공포의 송신계단 — 메인 게임 루프
+// 공포의 채널유기 — 메인 게임 루프
 import * as THREE from 'three';
-import songsinUrl from '../assets/songsin.png';
+import pigugongUrl from '../assets/pigugong.webp';
 import {
   FLOOR_PHI, FLOORS, FLOOR_H, R_IN, R_MID, DIFFICULTY,
   baseY, onLanding, landingCenter, polar, setFloors, pathDist, fireDoorPhi, R_OUT, toElevLocal,
 } from './config.js';
 import { buildWorld } from './world.js';
+import { ballTexture, discCanvas } from './textures.js';
 import { Player } from './player.js';
 import { Stalker } from './stalker.js';
 import { AudioEngine } from './audio.js';
@@ -28,8 +29,8 @@ const NOTES = [
   { k: 1, title: '관리일지 — 3월 2일', body: '계단 청소 중 엘리베이터가 혼자 움직였다.\n아무도 타지 않았는데 층수 표시기가 계속 바뀐다.\n\n그건 엘리베이터를 탄다. 버튼을 누르고, 문 앞에서 기다린다.\n엘리베이터가 움직이면… 계단이 조용해진다.' },
   { k: 3, title: '경고문 (찢어짐)', body: '비상구 표시등이 켜진 문은 열립니다.\n안으로 들어가 문을 닫으면 그는 들어오지 못합니다.\n\n단, 같은 층에 오래 머물지 마십시오.\n불이 깜빡이면 이미 그가 알고 있습니다.' },
   { k: 6, title: '누군가의 메모', body: '그는 엘리베이터에서 내려 계단을 따라 걸어 온다.\n위층에서 내려올 때가 제일 무섭다.\n\n발소리를 줄여. 손전등도 꺼.\n그는 빛과 소리를 따라온다.' },
-  { k: 9, title: '송신탑 무전 기록', body: '…수신기가 지직거리면 가까이 있다는 뜻이다.\n막대가 붉게 차면 뒤를 보지 말고 뛰어라.\n가장 가까운 비상문으로.' },
-  { k: 12, title: '찢긴 일기장', body: '송신은 웃고 있었다.\n하트 모양으로 일그러진 얼굴로.\n\n문을 닫고 숨었더니 한참 문고리를 흔들다가 갔다.\n두 번째에는 문을 부수고 들어왔다.' },
+  { k: 9, title: '피구공탑 무전 기록', body: '…수신기가 지직거리면 가까이 있다는 뜻이다.\n막대가 붉게 차면 뒤를 보지 말고 뛰어라.\n가장 가까운 비상문으로.' },
+  { k: 12, title: '찢긴 일기장', body: '피구공은 웃고 있었다.\n하트 모양으로 일그러진 얼굴로.\n\n문을 닫고 숨었더니 한참 문고리를 흔들다가 갔다.\n두 번째에는 문을 부수고 들어왔다.' },
   { k: 15, title: '마지막 메모', body: '옥상 문은 열려 있다. 맨 꼭대기 층까지만 가면 된다.\n\n하지만 위층에 가까워질수록 그도 알아챈다.\n그때부터는 멈추지 마.' },
 ];
 
@@ -159,18 +160,20 @@ class Game {
     report(0.45, '조명과 그림자 설치 중');
     await tick();
     this.applyQuality();
-    report(0.6, '송신을 깨우는 중');
+    report(0.6, '피구공을 깨우는 중');
     await tick();
-    const tex = await new THREE.TextureLoader().loadAsync(songsinUrl);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    this.stalker = new Stalker(this.scene, tex);
-    this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.04, fog: true }));
-    const aspect = tex.image.width / tex.image.height;
-    this.phantom.scale.set(1.8 * aspect, 1.8, 1);
+    // 피구공: 그림을 원형으로 깎아 공에 입힌다
+    const img = await new THREE.ImageLoader().loadAsync(pigugongUrl);
+    this.stalker = new Stalker(this.scene, ballTexture(img));
+    const disc = discCanvas(img);
+    const discTex = new THREE.CanvasTexture(disc);
+    discTex.colorSpace = THREE.SRGBColorSpace;
+    this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex, transparent: true, alphaTest: 0.04, fog: true }));
+    this.phantom.scale.set(1.24, 1.24, 1);
     this.phantom.visible = false;
     this.scene.add(this.phantom);
     this.director = new Director(this, this.phantom);
-    document.querySelector('#scare img').src = songsinUrl;
+    document.querySelector('#scare img').src = disc.toDataURL('image/png');
     report(0.75, '셰이더 컴파일 중');
     await tick();
     this.enterTitle(false);
@@ -1102,7 +1105,7 @@ class Game {
     this.cctvCells.forEach((el, k) => el.classList.toggle('here', k === here));
   }
 
-  /** 층 k 카메라에 송신이 비치는지 */
+  /** 층 k 카메라에 피구공이 비치는지 */
   cctvSees(k) {
     const s = this.stalker;
     if (!s.visible || Math.abs(s.floor - k) > 1) return false;
@@ -1236,7 +1239,7 @@ class Game {
     this.glitch = Math.max(this.glitch, v);
   }
 
-  /** 송신이 비상문을 연다 (slam: 부수듯 열어젖힘) */
+  /** 피구공이 비상문을 연다 (slam: 부수듯 열어젖힘) */
   forceDoor(k, slam = false) {
     const d = this.world.fireDoors[k];
     if (!d || d.target === 1 && d.open > 0.7) return;
@@ -1260,7 +1263,7 @@ class Game {
     this.stalker.onCarArrive(k, this);
   }
 
-  /** 송신이 탄 엘리베이터를 플레이어가 불렀다: 송신이 누른 층은 취소되고, 플레이어가 부른 층에서 내린다 */
+  /** 피구공이 탄 엘리베이터를 플레이어가 불렀다: 피구공이 누른 층은 취소되고, 플레이어가 부른 층에서 내린다 */
   onElevatorHijack(k) {
     const s = this.stalker;
     if (s.state !== 'elevator') return;
@@ -1331,7 +1334,7 @@ class Game {
     this.chases++;
     if (how === 'vanish') this.audio.glitch(0.35);
     this.director.after(2, () => {
-      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg(how === 'lost' ? '따돌렸다' : '송신이 사라졌다', 2);
+      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg(how === 'lost' ? '따돌렸다' : '피구공이 사라졌다', 2);
     });
   }
 
@@ -1340,7 +1343,7 @@ class Game {
     this.run.hides++;
     this.hides++;
     this.director.after(1.5, () => {
-      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg('송신이 떠났다', 2);
+      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg('피구공이 떠났다', 2);
     });
   }
 
@@ -1366,7 +1369,7 @@ class Game {
     this.audio.sting(0.7);
     this.audio.silence(true);
     this.glitch = 0.6;
-    // 사망 연출 준비: 고개가 송신 쪽으로 돌아가고 → 송신이 덮쳐 오며 → 뒤로 넘어짐
+    // 사망 연출 준비: 고개가 피구공 쪽으로 돌아가고 → 피구공이 덮쳐 오며 → 뒤로 넘어짐
     const cam = this.camera;
     this.dieCam0 = cam.position.clone();
     this.dieQ0 = cam.quaternion.clone();
@@ -1380,7 +1383,7 @@ class Game {
     this.dieSide = Math.random() < 0.5 ? -1 : 1;
     this.dieHit = false;
     this.dieStutter = 0;
-    this.dieDist0 = Math.max(0.95, Math.min(2.1, this.stalker.pos.distanceTo(cam.position)));
+    this.dieDist0 = Math.max(1.4, Math.min(2.6, this.stalker.pos.distanceTo(cam.position)));
   }
 
   win() {
@@ -1518,7 +1521,7 @@ class Game {
     u.uFade.value = Math.max(0, u.uFade.value - dt * 0.5);
     u.uFear.value = 0.25;
     u.uRed.value = 0;
-    // 참고 이미지 구도: 난간 너머로 위쪽 계단을 올려다봄. 송신이 계단을 내려오는 중
+    // 참고 이미지 구도: 난간 너머로 위쪽 계단을 올려다봄. 피구공이 계단을 내려오는 중
     const k = 6;
     const phi = landingCenter(k) + 1.0 + Math.sin(this.titleT * 0.08) * 0.08;
     const r = R_IN + 0.8;
@@ -1530,7 +1533,7 @@ class Game {
     cam.lookAt(target);
     cam.rotation.z += Math.sin(this.titleT * 0.2) * 0.01;
 
-    // 송신: 계단 꺾이는 곳에서 이쪽으로 천천히 내려온다
+    // 피구공: 계단 꺾이는 곳에서 이쪽으로 천천히 내려온다
     const s = this.stalker;
     const cyc = this.titleT % 14;
     s.phi = phi + 2.5 - cyc * 0.03;
@@ -1569,8 +1572,8 @@ class Game {
       p.exhausted = false;
       p.battery = 100;
     }
-    // 송신이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다.
-    // 송신이 바로 위·아래 층(±1) 안에 있을 때도 세지 않는다 — 움직일 수 없는 상황이니까 (악몽은 예외: 그래도 흐른다)
+    // 피구공이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다.
+    // 피구공이 바로 위·아래 층(±1) 안에 있을 때도 세지 않는다 — 움직일 수 없는 상황이니까 (악몽은 예외: 그래도 흐른다)
     const sFloor = this.stalker.inElevator ? Math.round(this.elevator.floor) : this.stalker.floor;
     const stalkerNear = !this.diff.strictLinger && (this.stalker.visible || this.stalker.inElevator) && Math.abs(sFloor - p.floor) <= 1;
     if (this.doorBlocked || stalkerNear) p.floorTime = Math.max(0, p.floorTime - dt);
@@ -1600,7 +1603,7 @@ class Game {
     if (this.trap) {
       p.rideCar(this.elevator.floor, FLOOR_H);
       if (this.elevator.moving) this.player.shake = Math.max(this.player.shake, 0.12);
-      // 문이 열리면 송신이 바로 앞 계단참에 서 있다 — 잠깐 마주 본 뒤 덮친다
+      // 문이 열리면 피구공이 바로 앞 계단참에 서 있다 — 잠깐 마주 본 뒤 덮친다
       if (this.elevator.doorK === this.trap.T && this.world.elevators[this.trap.T].open > 0.2) {
         p.frozen = true;
         this.elevator.hold(2);
@@ -1617,7 +1620,7 @@ class Game {
       s.visible = false;
       s.group.visible = false;
     }
-    // 송신이 엘리베이터에서 내리거나 탈 때마다 기척으로 알린다
+    // 피구공이 엘리베이터에서 내리거나 탈 때마다 기척으로 알린다
     const onStairs = !s.inElevator;
     if (!this.trap && this.stalkerOnStairs !== undefined && onStairs !== this.stalkerOnStairs) {
       this.hud.msg(onStairs ? '계단에 누군가 있는 것 같다' : '계단에 인기척이 느껴지지 않는다', 3.2, 'alert');
@@ -1675,7 +1678,7 @@ class Game {
     this.touch.update(target);
 
     // ---- 엘리베이터 표시기 ----
-    // 표시기: 실제 엘리베이터 위치 (송신이 탔는지는 알려주지 않는다)
+    // 표시기: 실제 엘리베이터 위치 (피구공이 탔는지는 알려주지 않는다)
     const el = this.elevator;
     const edir = el.v !== 0 ? Math.sign(el.v) : el.moving ? Math.sign(el.target - el.floor) : 0;
     const shown = edir > 0 ? Math.floor(el.floor + 1e-6) : Math.ceil(el.floor - 1e-6);
@@ -1707,7 +1710,7 @@ class Game {
       proximity: s.inElevator ? prox * 0.5 : prox,
       fear: this.fear,
       exert: p.exert,
-      hold: hidden && s.visible && d < 14, // 숨어 있는데 송신이 문 너머에 — 숨을 죽인다
+      hold: hidden && s.visible && d < 14, // 숨어 있는데 피구공이 문 너머에 — 숨을 죽인다
       floorRatio: fl / (FLOORS - 1),
     });
 
@@ -1719,7 +1722,7 @@ class Game {
     const cam = this.camera, s = this.stalker, u = this.post.uniforms;
     const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-    // 1) 고개가 송신 쪽으로 홱 돌아간다
+    // 1) 고개가 피구공 쪽으로 홱 돌아간다
     cam.quaternion.slerpQuaternions(this.dieQ0, this.dieQLook, ease(t / 0.25));
     // 2) 뒤로 넘어지며 주저앉는다 (고개가 들리고 기울어짐)
     const fall = ease((t - 0.55) / 0.8);
@@ -1734,9 +1737,9 @@ class Game {
     const jit = new THREE.Quaternion().setFromEuler(new THREE.Euler((Math.random() - 0.5) * 0.06 * shake, (Math.random() - 0.5) * 0.06 * shake, (Math.random() - 0.5) * 0.08 * shake));
     cam.quaternion.multiply(jit);
 
-    // 4) 송신이 멀리서 순식간에 덮쳐 온다
+    // 4) 피구공이 멀리서 순식간에 덮쳐 온다
     const lunge = t < 0.35 ? 0 : Math.pow(Math.min(1, (t - 0.35) / 0.7), 2.4);
-    const dist = this.dieDist0 + (0.62 - this.dieDist0) * lunge;
+    const dist = this.dieDist0 + (s.radius + 0.42 - this.dieDist0) * lunge; // 공 표면이 눈앞까지
     if (t > 0.35 && !this.dieHit) {
       this.dieHit = true;
       this.audio.jumpscare();
@@ -1777,7 +1780,7 @@ class Game {
         ['따돌린 추격', `${this.chases}회`],
         ['난이도', this.diff.label],
       ]);
-      const subs = ['계단은 아직 끝나지 않았다', '송신은 웃고 있었다', '엘리베이터가 다시 움직인다', '조금만 더 올라갔다면'];
+      const subs = ['계단은 아직 끝나지 않았다', '피구공은 웃고 있었다', '엘리베이터가 다시 움직인다', '조금만 더 올라갔다면'];
       document.getElementById('dead-sub').textContent = subs[Math.floor(Math.random() * subs.length)];
       document.body.classList.add('menu-on');
       this.hud.screen('dead');
@@ -1914,22 +1917,22 @@ function saveSettings(s) {
 // ------------------------------------------------------------------ 부팅
 const LOADING_TIPS = [
   '엘리베이터 표시기는 엘리베이터가 지금 몇 층에 있는지 보여준다.',
-  '송신이 엘리베이터에서 내리면, 계단에서 기척이 느껴진다.',
+  '피구공이 엘리베이터에서 내리면, 계단에서 기척이 느껴진다.',
   '초록 비상구 표시등이 켜진 문 안으로 숨을 수 있다. 문은 꼭 닫아라.',
   '비상실 CCTV로 모든 층의 문 앞을 볼 수 있다. Space를 누르면 전체 층이 한 화면에.',
-  '송신은 당신이 어디 있는지 모른다. 소리와 불빛으로 위인지 아래인지 짐작할 뿐이다.',
-  '멈춰 서 있으면 발소리가 나지 않는다. 송신은 웅크린 발소리도 잘 듣지 못한다.',
+  '피구공은 당신이 어디 있는지 모른다. 소리와 불빛으로 위인지 아래인지 짐작할 뿐이다.',
+  '멈춰 서 있으면 발소리가 나지 않는다. 피구공은 웅크린 발소리도 잘 듣지 못한다.',
   '비상실은 매번 절반만 열려 있다. 초록 표시등을 찾아라.',
   '같은 층에 오래 머물면 조명이 깜빡이기 시작한다. 그건 경고다.',
   '달리면 빠르지만, 발소리는 계단 전체에 울린다.',
   '손전등 빛은 멀리서도 보인다. 하지만 끄면 아무것도 보이지 않는다.',
   '체력이 바닥난 채로 달리면 넘어진다.',
   '배터리는 계단보다 비상실 모니터 책상 위에서 찾기 쉽다.',
-  '위로 올라갈수록 송신은 더 예민해진다.',
+  '위로 올라갈수록 피구공은 더 예민해진다.',
   '일시정지 뒤에 오래 숨어 있지 마라.',
   'F11 키를 눌러 전체 화면으로 플레이하면 더 몰입할 수 있다.',
-  '엘리베이터를 다른 층으로 불러 두면, 송신은 한참을 기다려야 한다.',
-  '송신도 엘리베이터 버튼을 눌러야 탈 수 있다.',
+  '엘리베이터를 다른 층으로 불러 두면, 피구공은 한참을 기다려야 한다.',
+  '피구공도 엘리베이터 버튼을 눌러야 탈 수 있다.',
 ];
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

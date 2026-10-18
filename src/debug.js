@@ -1,5 +1,5 @@
 // 디버그 패널 — 코나미 코드(↑ ↑ ↓ ↓ ← → ← → B A)로 열고 닫는다
-// 원하는 층으로 이동, 무적·송신 정지·무한 체력, 게임 속도, 사건 발동, 진행 상황 조작, 실시간 상태 보기.
+// 원하는 층으로 이동, 무적·피구공 정지·무한 체력, 게임 속도, 사건 발동, 진행 상황 조작, 실시간 상태 보기.
 import { ACHIEVEMENTS } from './achievements.js';
 import { DIFFICULTY_ORDER, landingCenter } from './config.js';
 
@@ -32,8 +32,8 @@ export class DebugPanel {
     this.g = game;
     this.open = false;
     this.god = false;      // 잡히지 않음
-    this.freeze = false;   // 송신 AI 정지
-    this.hide = false;     // 송신 숨김 (없는 것처럼)
+    this.freeze = false;   // 피구공 AI 정지
+    this.hide = false;     // 피구공 숨김 (없는 것처럼)
     this.infinite = false; // 체력·배터리 무한
     this.speed = 1;        // 게임 속도
     this.auto = false;     // 자동 클리어 AI
@@ -53,10 +53,10 @@ export class DebugPanel {
       <h4>자동 클리어 AI</h4>
       <label><input type="checkbox" data-opt="auto"> 자동 클리어 AI 켜기</label>
       <div class="row" style="color:#8fbf8f">AI: <span id="dbg-ai">꺼짐</span></div>
-      <h4>송신</h4>
+      <h4>피구공</h4>
       <label><input type="checkbox" data-opt="god"> 무적 (잡히지 않음)</label>
-      <label><input type="checkbox" data-opt="freeze"> 송신 정지 (AI 멈춤)</label>
-      <label><input type="checkbox" data-opt="hide"> 송신 숨기기</label>
+      <label><input type="checkbox" data-opt="freeze"> 피구공 정지 (AI 멈춤)</label>
+      <label><input type="checkbox" data-opt="hide"> 피구공 숨기기</label>
       <div class="row"><button class="b" data-dbg="hunt">FOUND YOU 발동</button><button class="b" data-dbg="summon">내 층으로 부르기</button></div>
       <div class="row"><button class="b" data-dbg="away">멀리 보내기</button><button class="b" data-dbg="callEl">엘리베이터 호출</button></div>
       <h4>플레이어</h4>
@@ -230,7 +230,7 @@ export class DebugPanel {
       `상태     ${g.state}  ${g.diff ? g.diff.label : ''}`,
       `플레이어 ${p.floor + 1}F${p.inRoom ? ' (비상실)' : p.inCar ? ' (엘리베이터)' : ''}  체류 ${p.floorTime.toFixed(0)}s`,
       `         체력 ${p.stamina.toFixed(0)}  배터리 ${p.battery.toFixed(0)}  소음 ${p.noise.toFixed(1)}`,
-      `송신     ${s.state} @ ${s.inElevator ? `E${el.floor.toFixed(1)}` : `${s.floor + 1}F`}  ${s.visible ? '보임' : '안 보임'}`,
+      `피구공     ${s.state} @ ${s.inElevator ? `E${el.floor.toFixed(1)}` : `${s.floor + 1}F`}  ${s.visible ? '보임' : '안 보임'}`,
       `         사냥 ${s.hunting ? 'O' : '-'}  문부수기 ${s.burst ? 'O' : '-'}  관심없음 ${s.calmT.toFixed(0)}s`,
       `         짐작 ${b && b.t < 1e8 ? `${Math.round(b.phi / (Math.PI * 4)) + 1}F 근처, ${b.t.toFixed(1)}s 전` : '없음'}`,
       `열쇠     ${g.diff?.keyRequired ? (g.hasKey ? '가짐' : `없음 (${g.keyWhere === 'car' ? '엘리베이터 안' : `${g.keyWhere + 1}F 비상실`})`) : '필요 없음'}`,

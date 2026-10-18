@@ -4,8 +4,8 @@ import {
   TAU, FLOORS, FLOOR_H, R_MID, baseY, polar, landingCenter, R_OUT,
 } from './config.js';
 
-// 송신이 이유 없이 모습을 드러내거나(환영) 층 번호가 '송신'으로 바뀌는 연출은 넣지 않는다 —
-// 보이는 송신은 언제나 진짜 송신이다. 무작위 이벤트는 소리·빛·엘리베이터로만 불안을 만든다.
+// 피구공이 이유 없이 모습을 드러내거나(환영) 층 번호가 '피구공'으로 바뀌는 연출은 넣지 않는다 —
+// 보이는 피구공은 언제나 진짜 피구공이다. 무작위 이벤트는 소리·빛·엘리베이터로만 불안을 만든다.
 const EVENTS = [
   ['blackout', 2],
   ['ding', 2.5],
@@ -17,7 +17,7 @@ const EVENTS = [
 export class Director {
   constructor(game, phantom) {
     this.g = game;
-    this.phantom = phantom; // 송신 환영 스프라이트
+    this.phantom = phantom; // 피구공 환영 스프라이트
     this.tmp = new THREE.Vector3();
     this.reset();
   }

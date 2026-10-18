@@ -1,12 +1,12 @@
-// 자동 클리어 AI (디버그) — 사람처럼 입력만으로 플레이한다. 화면에 보이는 것(송신의 모습, SIGNAL 탐지기,
+// 자동 클리어 AI (디버그) — 사람처럼 입력만으로 플레이한다. 화면에 보이는 것(피구공의 모습, SIGNAL 탐지기,
 // 엘리베이터 표시등)과 들리는 것으로 판단한다.
 //
-// 원칙: 들키지 않는 것이 전부다. 악몽의 송신은 달리기와 거의 같은 속도로 쫓아오므로 한번 들키면 뿌리칠 수 없다.
-// - 걷는다. 달리기는 소리가 두 배로 퍼져 오히려 송신을 부른다 — 쫓길 때만 달리고, 체력은 바닥나기 전에 아낀다.
-// - 송신이 보이면(쫓기기 전에) 송신보다 먼저 닿는 열린 비상실로 조용히 들어가 문을 닫는다. 없으면 멀어지는 쪽으로 걷고,
+// 원칙: 들키지 않는 것이 전부다. 악몽의 피구공은 달리기와 거의 같은 속도로 쫓아오므로 한번 들키면 뿌리칠 수 없다.
+// - 걷는다. 달리기는 소리가 두 배로 퍼져 오히려 피구공을 부른다 — 쫓길 때만 달리고, 체력은 바닥나기 전에 아낀다.
+// - 피구공이 보이면(쫓기기 전에) 피구공보다 먼저 닿는 열린 비상실로 조용히 들어가 문을 닫는다. 없으면 멀어지는 쪽으로 걷고,
 //   너무 가까우면 웅크려 소리를 죽인다.
-// - 송신이 탄 엘리베이터가 이 층으로 오면 엘리베이터 문 앞을 피한다.
-// - 숨어서는 송신이 떠날 때까지(엘리베이터에 타서 문이 닫힐 때까지) 기다린다. 같은 층 체류 한계 직전에는 어쩔 수 없이 나간다.
+// - 피구공이 탄 엘리베이터가 이 층으로 오면 엘리베이터 문 앞을 피한다.
+// - 숨어서는 피구공이 떠날 때까지(엘리베이터에 타서 문이 닫힐 때까지) 기다린다. 같은 층 체류 한계 직전에는 어쩔 수 없이 나간다.
 // - 악몽: 열쇠부터 (비상실 책상 / 엘리베이터 안 — 꺼내자마자 나온다). 꼭대기 층 옥상 문으로 탈출.
 import {
   R_MID, R_OUT, CORR_L, LANDING, FLOOR_PHI, DOOR_ANGLE, ROOF_DOOR_PHI, fireDoorPhi, pathDist, toRoomLocal, fromRoomLocal, fromElevLocal, toElevLocal,
@@ -71,20 +71,20 @@ export class AutoPilot {
     for (const k in inp) inp[k] = false;
   }
 
-  /** 지금 보이는 것: 송신의 위치·상태, 들키는 거리, 엘리베이터 표시등 */
+  /** 지금 보이는 것: 피구공의 위치·상태, 들키는 거리, 엘리베이터 표시등 */
   look() {
     const g = this.g, p = g.player, s = g.stalker, el = g.elevator, diff = g.diff;
     const seen = s.visible && !s.inElevator;
     let d = seen ? s.distTo(p) : Infinity;
-    // 숨어 있을 때는 층을 뚫은 직선거리가 아니라, 송신이 계단을 따라 이 방 문까지 와야 하는 거리
+    // 숨어 있을 때는 층을 뚫은 직선거리가 아니라, 피구공이 계단을 따라 이 방 문까지 와야 하는 거리
     if (seen && p.inRoom && s.roomK !== p.roomK) d = pathDist(s.phi, s.r, fireDoorPhi(p.roomK), R_OUT - 0.5) + 2.5;
     const chased = seen && s.chasing;
     const sharp = 1 + 0.3 * s.heightRatio(p);
     const walkR = 8.5 * diff.hearingMul * sharp; // 걸으면 이 안에서 들킨다
     const sightR = diff.sight * sharp;
     const speed = chased ? diff.chaseSpeed + diff.chaseSpeedPerFloor * p.maxFloor : s.state === 'approach' ? diff.approachSpeed : diff.roamSpeed * 1.3;
-    // 송신이 탄 엘리베이터가 이 층으로 오는 중이거나 이 층에서 열려 있다
-    // 송신이 탄 엘리베이터가 가는 층(표시등) — 이 층이나 바로 위·아래면, 그 층 엘리베이터 문 근처는 위험하다
+    // 피구공이 탄 엘리베이터가 이 층으로 오는 중이거나 이 층에서 열려 있다
+    // 피구공이 탄 엘리베이터가 가는 층(표시등) — 이 층이나 바로 위·아래면, 그 층 엘리베이터 문 근처는 위험하다
     const k = p.floor;
     const T = s.inElevator ? (el.doorK >= 0 ? el.doorK : el.target ?? el.dest) : null;
     const carT = T !== null && T !== undefined && Math.abs(T - k) <= 1 ? T : null;
@@ -134,18 +134,18 @@ export class AutoPilot {
           const lo = k * FLOOR_PHI, hi = (k + 1) * FLOOR_PHI;
           let dir = p.phi - lo < hi - p.phi ? -1 : 1;
           if (k === 0) dir = 1;
-          if (L.seen && L.d < 14 && Math.sign(g.stalker.phi - p.phi) === dir) dir = -dir; // 송신 쪽 경계는 피한다
+          if (L.seen && L.d < 14 && Math.sign(g.stalker.phi - p.phi) === dir) dir = -dir; // 피구공 쪽 경계는 피한다
           const quiet = L.seen && L.d < L.walkR + 5;
           this.walkSpiral(dir, hunted ? 'run' : quiet ? 'sneak' : 'walk');
           this.status = hunted ? 'FOUND YOU — 층을 바꾼다' : `같은 층에 너무 오래 — ${quiet ? '웅크려 ' : ''}층을 바꾼다`;
           return;
         }
 
-        // 1) 쫓긴다: 먼저 닿는 비상실로 뛰어든다. 없으면 송신 반대쪽으로 달아난다
+        // 1) 쫓긴다: 먼저 닿는 비상실로 뛰어든다. 없으면 피구공 반대쪽으로 달아난다
         if (L.chased) {
           const room = this.safeRoom(this.runOK ? SPRINT : WALK, L.speed, 0.9, L);
           if (room >= 0) return this.goHide(room, 'run', `쫓긴다 — ${room + 1}F 비상실로`);
-          // 달아날 방향은 한번 정하면 잠깐 유지한다 (송신이 바로 위아래를 오갈 때 갈팡질팡하지 않게)
+          // 달아날 방향은 한번 정하면 잠깐 유지한다 (피구공이 바로 위아래를 오갈 때 갈팡질팡하지 않게)
           this.fleeT -= dt;
           if (this.fleeT <= 0 || (L.d < 4 && Math.sign(g.stalker.phi - p.phi) === this.fleeDir)) {
             this.fleeDir = L.above && p.phi > 2 ? -1 : 1;
@@ -157,24 +157,24 @@ export class AutoPilot {
           return;
         }
 
-        // 2) 송신이 보인다(아직 들키지 않음): 조용히 비상실로, 없으면 멀어진다
+        // 2) 피구공이 보인다(아직 들키지 않음): 조용히 비상실로, 없으면 멀어진다
         const near = L.seen && L.d < L.walkR + 12;
         if (near) {
           const room = this.safeRoom(WALK, L.speed, 0.8, L);
-          if (room >= 0) return this.goHide(room, 'walk', `송신이 보인다 — ${room + 1}F 비상실에 숨는다`);
+          if (room >= 0) return this.goHide(room, 'walk', `피구공이 보인다 — ${room + 1}F 비상실에 숨는다`);
           // 걸어서는 못 닿지만 달리면 먼저 닿는 방: 들키더라도 뛰어들어 문을 닫는다 (쫓아와도 닫힌 문 앞에서 멈춘다)
           if (this.runOK && p.stamina > 50) {
             const dash = this.safeRoom(SPRINT, L.d < L.walkR + 4 ? L.speed + 1.4 : g.diff.chaseSpeed + g.diff.chaseSpeedPerFloor * p.maxFloor, 0.75, L);
-            if (dash >= 0) return this.goHide(dash, 'run', `송신이 다가온다 — ${dash + 1}F 비상실로 뛴다`);
+            if (dash >= 0) return this.goHide(dash, 'run', `피구공이 다가온다 — ${dash + 1}F 비상실로 뛴다`);
           }
           const dir = L.above && p.phi > 2 ? -1 : 1;
           const sneak = L.d < L.walkR + 2;
           this.walkSpiral(dir, sneak ? 'sneak' : 'walk');
-          this.status = `${sneak ? '웅크려 ' : ''}송신에게서 멀어지는 중 (${L.d.toFixed(0)}m)`;
+          this.status = `${sneak ? '웅크려 ' : ''}피구공에게서 멀어지는 중 (${L.d.toFixed(0)}m)`;
           return;
         }
 
-        // 3) 송신이 탄 엘리베이터가 이 층으로 온다: 이 층 비상실에 숨거나, 엘리베이터 문 앞을 피한다
+        // 3) 피구공이 탄 엘리베이터가 이 층으로 온다: 이 층 비상실에 숨거나, 엘리베이터 문 앞을 피한다
         if (L.nearCar) {
           const d = doors[L.carT];
           const time = L.carT !== k || p.floorTime < g.diff.hideThreshold - 14;
@@ -196,7 +196,7 @@ export class AutoPilot {
           this.mode = 'walk';
           return this.set('toRoom', `${k + 1}F 비상실의 열쇠를 가지러`);
         }
-        // 엘리베이터 열쇠: 송신이 계단 저 멀리 나와 있는 걸 확인했을 때만 부른다 (차 안에 송신이 있으면 문이 열리자마자 끝이다)
+        // 엘리베이터 열쇠: 피구공이 계단 저 멀리 나와 있는 걸 확인했을 때만 부른다 (차 안에 피구공이 있으면 문이 열리자마자 끝이다)
         const sOut = g.stalker.visible && !g.stalker.inElevator && g.elevator.occupant !== 'stalker';
         if (needKey && g.keyWhere === 'car' && k >= 2 && sOut && L.d > 22) {
           return this.set('carCall', '엘리베이터 안의 열쇠를 가지러');
@@ -223,23 +223,23 @@ export class AutoPilot {
           if (d && !d.locked && p.floorTime < g.diff.hideThreshold - 10) return this.goHide(k, 'walk', '엘리베이터 열쇠 기회를 기다린다');
         }
 
-        // 6) 평소: 걸어서 오른다. 송신이 엘리베이터 안에 갇혀 있는 동안(문이 닫힘)은 아무것도 못 느끼니 서두른다
+        // 6) 평소: 걸어서 오른다. 피구공이 엘리베이터 안에 갇혀 있는 동안(문이 닫힘)은 아무것도 못 느끼니 서두른다
         const deaf = g.stalker.inElevator && g.elevator.doorK < 0 && !L.carHere;
         const hurry = deaf && p.stamina > 60 && this.runOK;
         this.walkSpiral(1, hurry ? 'run' : 'walk');
-        this.status = hurry ? `송신이 엘리베이터 안 — 서둘러 오른다 (${k + 1}F)` : `오르는 중 (${k + 1}F)`;
+        this.status = hurry ? `피구공이 엘리베이터 안 — 서둘러 오른다 (${k + 1}F)` : `오르는 중 (${k + 1}F)`;
         return;
       }
 
       case 'toRoom': {
         const d = doors[this.room];
         if (!d || d.locked) return this.set('climb');
-        // 가는 길에 송신이 앞을 막으면 다시 판단
+        // 가는 길에 피구공이 앞을 막으면 다시 판단
         if (this.purpose === 'hide' && L.seen && this.stateT > 0.3) {
           const dp = fireDoorPhi(this.room);
           const it = pathDist(g.stalker.phi, g.stalker.r, dp, R_OUT - 0.5);
           const me = pathDist(p.phi, p.r, dp, R_OUT - 0.5);
-          if (it < me * 0.7 && it < 6) return this.set('climb', '송신이 앞을 막았다');
+          if (it < me * 0.7 && it < 6) return this.set('climb', '피구공이 앞을 막았다');
           if (L.chased) this.mode = 'run';
         }
         const dp = fireDoorPhi(this.room);
@@ -290,27 +290,27 @@ export class AutoPilot {
       case 'hide': {
         const s = g.stalker;
         p.pitch *= 0.8;
-        // 송신이 가까이 있거나(계단·문 앞·같은 층 엘리베이터), 이 층으로 오는 중이면 기다린다
+        // 피구공이 가까이 있거나(계단·문 앞·같은 층 엘리베이터), 이 층으로 오는 중이면 기다린다
         const busy = (L.seen && L.d < 30) || s.state === 'search' || s.state === 'chase' || L.carHere || s.state === 'arriving' || s.state === 'trapWait';
         this.quietT = busy ? 0 : this.quietT + dt;
         const limit = g.diff.hideThreshold - 4;
-        // 체류 한계가 다가와도 송신이 문밖 가까이 있으면 나가지 않는다 (문 앞을 막고 있는 동안은 체류 시간이 흐르지 않는다)
+        // 체류 한계가 다가와도 피구공이 문밖 가까이 있으면 나가지 않는다 (문 앞을 막고 있는 동안은 체류 시간이 흐르지 않는다)
         const outside = L.seen && (L.d < 7 || L.raw < 8);
         if (p.floorTime > limit && !outside) return this.set('exitRoom', '더 머물면 들킨다 — 잠깐 층을 바꾼다');
         if (s.hunting && !L.seen) return this.set('exitRoom', 'FOUND YOU — 문을 부수러 온다, 층을 바꾼다');
-        if (this.quietT > 1.2 && this.stateT > 2) return this.set('exitRoom', '송신이 떠났다');
-        this.status = busy ? `숨죽이는 중 (송신이 근처에, ${Math.max(0, limit - p.floorTime).toFixed(0)}초 여유)` : '조용해지기를 기다리는 중';
+        if (this.quietT > 1.2 && this.stateT > 2) return this.set('exitRoom', '피구공이 떠났다');
+        this.status = busy ? `숨죽이는 중 (피구공이 근처에, ${Math.max(0, limit - p.floorTime).toFixed(0)}초 여유)` : '조용해지기를 기다리는 중';
         return;
       }
 
       case 'exitRoom': {
         if (!p.inRoom) return this.set('climb');
         const d = doors[p.roomK];
-        // 문을 열기 전에 송신이 다시 보이면 도로 숨는다 (체류 한계면 웅크려 나간다 — 문밖에 바짝 붙어 있을 때만 기다린다)
+        // 문을 열기 전에 피구공이 다시 보이면 도로 숨는다 (체류 한계면 웅크려 나간다 — 문밖에 바짝 붙어 있을 때만 기다린다)
         const forced = p.floorTime > g.diff.hideThreshold - 4;
         if (!g.stalker.hunting && d.open < 0.3 && L.seen && (forced ? L.d < 7 || L.raw < 8 : L.d < 16 || L.raw < 9)) {
           d.target = 0;
-          return this.set('hide', '문밖에 송신 — 도로 숨는다');
+          return this.set('hide', '문밖에 피구공 — 도로 숨는다');
         }
         if (d.target < 1) d.target = 1;
         const c = toRoomLocal(p.x, p.z);
@@ -328,7 +328,7 @@ export class AutoPilot {
         const k = p.floor;
         const el = g.elevator;
         const front = fromElevLocal(0, 0.9);
-        if ((L.seen && L.d < L.walkR + 10) || g.stalker.inElevator || el.occupant === 'stalker') return this.set('climb', '송신 때문에 열쇠는 나중에');
+        if ((L.seen && L.d < L.walkR + 10) || g.stalker.inElevator || el.occupant === 'stalker') return this.set('climb', '피구공 때문에 열쇠는 나중에');
         const dist = this.steer(front.x, front.z);
         if (dist < 0.5) {
           this.stop();
@@ -381,7 +381,7 @@ export class AutoPilot {
   }
 
   /**
-   * 숨을 비상실: 이 층·아래·위층 가운데 열려 있고, 송신보다 확실히 먼저 닿는 가장 가까운 곳 (-1: 없음)
+   * 숨을 비상실: 이 층·아래·위층 가운데 열려 있고, 피구공보다 확실히 먼저 닿는 가장 가까운 곳 (-1: 없음)
    * mySpeed/itSpeed 로 도착 시간을 견주고(문 여는 시간 포함), margin 만큼 여유가 있어야 한다.
    */
   safeRoom(mySpeed, itSpeed, margin, L) {
@@ -398,7 +398,7 @@ export class AutoPilot {
       if (me > 26) continue;
       if (L.seen) {
         const it = pathDist(s.phi, s.r, dp, R_OUT - 0.5);
-        // 송신이 문과 나 사이에 있으면 안 된다
+        // 피구공이 문과 나 사이에 있으면 안 된다
         const between = (s.phi - p.phi) * (dp - p.phi) > 0 && Math.abs(s.phi - p.phi) < Math.abs(dp - p.phi) + 0.3;
         if (between || tMe > (it / itSpeed) * margin) continue;
       }

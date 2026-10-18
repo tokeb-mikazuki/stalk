@@ -172,11 +172,11 @@ export function floorSignTexture(floor, isRoof) {
 
 export function glitchSignTexture() {
   const [c, ctx] = canvas(256, 256);
-  ctx.font = 'bold 120px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+  ctx.font = 'bold 76px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(70,0,0,0.9)';
-  ctx.fillText('송신', 128, 128);
+  ctx.fillText('피구공', 128, 128, 240);
   return toTexture(c, false);
 }
 
@@ -404,7 +404,7 @@ export function exitSignTexture(on) {
   return toTexture(c, false);
 }
 
-/** 송신의 뒷모습: 원본 실루엣을 머리카락 색으로 채움 */
+/** 피구공의 뒷모습: 원본 실루엣을 머리카락 색으로 채움 */
 export function silhouetteTexture(image) {
   const [c, ctx] = canvas(image.width, image.height);
   ctx.drawImage(image, 0, 0);
@@ -632,7 +632,7 @@ export function capacityPlateTexture() {
   ctx.fillText('적재하중 1,000 kg', 128, 78);
   ctx.font = '13px "Noto Sans KR", sans-serif';
   ctx.fillStyle = '#9fb0c6';
-  ctx.fillText('승강기 안전인증 · 송신아파트', 128, 106);
+  ctx.fillText('승강기 안전인증 · 피구공아파트', 128, 106);
   return toTexture(c, false);
 }
 
@@ -682,4 +682,70 @@ export function sillTexture() {
     ctx.fillRect(0, y, 256, 3);
   }
   return toTexture(c);
+}
+
+/** 그림을 원형으로 깎아 낸 캔버스 (원 밖은 투명) */
+export function discCanvas(image, size = 512) {
+  const [c, ctx] = canvas(size, size);
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  const s = Math.min(image.width, image.height);
+  ctx.drawImage(image, (image.width - s) / 2, (image.height - s) / 2, s, s, 0, 0, size, size);
+  return c;
+}
+
+/**
+ * 피구공: 원형으로 깎은 그림을 공의 앞쪽(+z)에 정사영으로 입힌 등장방형 텍스처.
+ * 나머지는 하얀 고무공 — 아주 옅은 오돌토돌한 결.
+ */
+export function ballTexture(image) {
+  const S = 256;
+  const [src, sctx] = canvas(S, S);
+  const m = Math.min(image.width, image.height);
+  sctx.fillStyle = '#fff';
+  sctx.fillRect(0, 0, S, S);
+  sctx.drawImage(image, (image.width - m) / 2, (image.height - m) / 2, m, m, 0, 0, S, S);
+  const sd = sctx.getImageData(0, 0, S, S).data;
+  const W = 1024, H = 512;
+  const [c, ctx] = canvas(W, H);
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  const FACE = 0.93; // 공의 앞면에서 그림이 차지하는 반지름 비율
+  for (let y = 0; y < H; y++) {
+    const th = ((y + 0.5) / H) * Math.PI;
+    const st = Math.sin(th), ct = Math.cos(th);
+    for (let x = 0; x < W; x++) {
+      const ph = ((x + 0.5) / W) * Math.PI * 2;
+      // THREE.SphereGeometry 의 꼭짓점 식과 같다
+      const dx = -Math.cos(ph) * st, dy = ct, dz = Math.sin(ph) * st;
+      const grain = 236 + ((Math.sin(x * 1.7 + y * 2.3) * Math.sin(x * 0.9 - y * 1.3) * 0.5 + 0.5) * 10) | 0;
+      let r = grain, gg = grain - 2, b = grain - 5;
+      if (dz > 0) {
+        const u = dx / FACE, v = dy / FACE;
+        const rr = u * u + v * v;
+        if (rr <= 1) {
+          const sx = Math.min(S - 1, Math.max(0, ((u + 1) / 2) * S)) | 0;
+          const sy = Math.min(S - 1, Math.max(0, ((1 - v) / 2) * S)) | 0;
+          const i = (sy * S + sx) * 4;
+          const k = sd[i] / 255; // 흰 바탕은 공 색 그대로, 검은 선은 검게
+          r = r * k + sd[i] * (1 - k) * 0.2;
+          gg = gg * k + sd[i + 1] * (1 - k) * 0.2;
+          b = b * k + sd[i + 2] * (1 - k) * 0.2;
+        }
+      }
+      const o = (y * W + x) * 4;
+      d[o] = r;
+      d[o + 1] = gg;
+      d[o + 2] = b;
+      d[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
 }

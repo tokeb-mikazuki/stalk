@@ -178,7 +178,7 @@ export class AudioEngine {
     this.out(g, 0.4);
   }
 
-  /** 송신 감지기의 지직거림 (원작의 synth meter) */
+  /** 피구공 감지기의 지직거림 (원작의 synth meter) */
   buildStatic() {
     const ctx = this.ctx;
     const n = this.noiseSrc(true);
@@ -262,13 +262,13 @@ export class AudioEngine {
     o.stop(t + dur + 0.05);
   }
 
-  /** 송신이 가까워질 때 울리는 경고 삑 */
+  /** 피구공이 가까워질 때 울리는 경고 삑 */
   squelch() {
     this.uiTone(1900, 1850, 0.07, 0.07);
     setTimeout(() => this.uiTone(1250, 1200, 0.1, 0.07), 90);
   }
 
-  /** 송신의 목소리: 포먼트 필터를 거친 웃음 섞인 웅얼거림 */
+  /** 피구공의 목소리: 포먼트 필터를 거친 웃음 섞인 웅얼거림 */
   buildVoice() {
     const ctx = this.ctx;
     this.voicePanner = this.panner(0, -100, 0, 2.2, 1.25);
@@ -375,7 +375,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
 
-    // 송신 목소리
+    // 피구공 목소리
     if (s.voicePos) this.setPos(this.voicePanner, s.voicePos.x, s.voicePos.y, s.voicePos.z);
     let target = s.voiceOn ? (s.chasing ? 1.0 : 0.45) * (s.muffled ? 0.4 : 1) : 0;
     this.laughT -= dt;
@@ -431,7 +431,7 @@ export class AudioEngine {
     }
 
     // 숨소리: 늘 쉬고 있다. 평소엔 코로 조용히 느리게, 달리고 나면 입으로 거칠고 빠르게,
-    // 무서우면 떨리고, 숨어 있는데 송신이 가까우면 숨을 죽인다 (얕고 길게).
+    // 무서우면 떨리고, 숨어 있는데 피구공이 가까우면 숨을 죽인다 (얕고 길게).
     const b = Math.max(s.exert || 0, (s.fear || 0) * 0.5);
     this.breathLvl = (this.breathLvl ?? 0) + (b - (this.breathLvl ?? 0)) * Math.min(1, dt * 1.5);
     this.breathT -= dt;

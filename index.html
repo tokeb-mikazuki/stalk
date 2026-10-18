@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
-  <title>공포의 송신계단</title>
+  <title>공포의 채널유기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@600;900&display=swap" rel="stylesheet" />
@@ -394,7 +394,7 @@
 
   <!-- 로딩 -->
   <div id="loading">
-    <div class="ld-logo"><div class="en">SONGSHIN STAIRWELL</div><div class="ko">공포의 송신계단</div></div>
+    <div class="ld-logo"><div class="en">CHANNEL YUGI</div><div class="ko">공포의 채널유기</div></div>
     <div class="ld-tip"><b>TIP</b><span id="ld-tip-text"></span></div>
     <div class="ld-row"><span id="ld-step">불러오는 중</span><span id="ld-pct">0%</span></div>
     <div class="ld-bar"><div class="ld-fill" id="ld-fill"></div></div>
@@ -402,7 +402,7 @@
 
   <!-- 시작 대기 -->
   <div id="press">
-    <div class="logo"><div class="en">SONGSHIN STAIRWELL</div><h1>공포의 송신계단</h1><div class="line"></div></div>
+    <div class="logo"><div class="en">CHANNEL YUGI</div><h1>공포의 채널유기</h1><div class="line"></div></div>
     <div class="press-key"><span class="pc-only">아무 키나 누르거나 클릭하세요</span><span class="touch-only">화면을 탭하세요</span></div>
   </div>
 
@@ -413,7 +413,7 @@
       <div class="meter" id="battery"><div class="lbl"><span>LIGHT · 손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
     </div>
     <div id="detector">
-      <div class="head"><span>SIGNAL<i> 송신</i></span><b>신호 없음</b></div>
+      <div class="head"><span>SIGNAL<i> 피구공</i></span><b>신호 없음</b></div>
       <div id="dbars"></div>
     </div>
     <div id="cross"></div>
@@ -428,8 +428,8 @@
   <!-- 메인 메뉴 -->
   <section id="title" class="screen shade-left">
     <div class="logo">
-      <div class="en">SONGSHIN STAIRWELL</div>
-      <h1>공포의 송신계단</h1>
+      <div class="en">CHANNEL YUGI</div>
+      <h1>공포의 채널유기</h1>
       <div class="line"></div>
       <div class="tag">꼭대기 층까지, 살아서.</div>
     </div>
@@ -452,16 +452,16 @@
       <button class="dcard" data-act="start" data-diff="casual" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL 01</div><h3>캐주얼</h3><div class="floors">20층</div>
-        <p>송신이 느리고 쉽게 포기한다. 숨을 시간도 넉넉하다. 처음이라면 여기서.</p>
-        <div class="stat">송신 속도<i style="--v:30%"></i></div>
+        <p>피구공이 느리고 쉽게 포기한다. 숨을 시간도 넉넉하다. 처음이라면 여기서.</p>
+        <div class="stat">피구공 속도<i style="--v:30%"></i></div>
         <div class="stat">집요함<i style="--v:25%"></i></div>
         <div class="stat">어둠<i style="--v:30%"></i></div>
       </button>
       <button class="dcard" data-act="start" data-diff="normal" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL 02</div><h3>노말</h3><div class="floors">20층 · 권장</div>
-        <p>의도한 공포. 송신은 당신이 있는 층 근처로 자주 내려온다.</p>
-        <div class="stat">송신 속도<i style="--v:55%"></i></div>
+        <p>의도한 공포. 피구공은 당신이 있는 층 근처로 자주 내려온다.</p>
+        <div class="stat">피구공 속도<i style="--v:55%"></i></div>
         <div class="stat">집요함<i style="--v:50%"></i></div>
         <div class="stat">어둠<i style="--v:55%"></i></div>
       </button>
@@ -469,15 +469,15 @@
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL 03</div><h3>하드</h3><div class="floors">20층</div>
         <p>빠르고 집요하다. 손전등 배터리는 금방 닳고, 숨을 수 있는 시간은 짧다.</p>
-        <div class="stat">송신 속도<i style="--v:75%"></i></div>
+        <div class="stat">피구공 속도<i style="--v:75%"></i></div>
         <div class="stat">집요함<i style="--v:75%"></i></div>
         <div class="stat">어둠<i style="--v:75%"></i></div>
       </button>
       <button class="dcard nightmare" data-act="start" data-diff="nightmare" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL ??</div><h3>악몽</h3><div class="floors">30층</div>
-        <p>옥상 문이 잠겨 있다 — 열쇠는 엘리베이터 안, 또는 꼭대기 층들의 비상실에. 송신은 거의 달리는 속도로 쫓아온다.</p>
-        <div class="stat">송신 속도<i style="--v:95%"></i></div>
+        <p>옥상 문이 잠겨 있다 — 열쇠는 엘리베이터 안, 또는 꼭대기 층들의 비상실에. 피구공은 거의 달리는 속도로 쫓아온다.</p>
+        <div class="stat">피구공 속도<i style="--v:95%"></i></div>
         <div class="stat">집요함<i style="--v:100%"></i></div>
         <div class="stat">어둠<i style="--v:95%"></i></div>
         <div class="lock"><b>🔒</b>하드 모드를 클리어하면<br />열립니다</div>
@@ -508,18 +508,18 @@
       <h4>생존 수칙</h4>
       <ul class="tips">
         <li><b>목표</b> — 꼭대기 층(악몽은 30층) 옥상 문을 열고 탈출한다.</li>
-        <li><b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 걸어온다. 위층에서 내려오기도 한다.</li>
-        <li>송신은 당신이 어디 있는지 <b>정확히 모른다</b>. 발소리·인기척·손전등 불빛으로 <b>몇 층쯤 위인지 아래인지</b>만 짐작해 그쪽으로 간다. 문을 닫고 숨으면 아무것도 모른다.</li>
-        <li>엘리베이터 표시기는 <b>엘리베이터의 현재 층</b>을 보여준다. 송신이 엘리베이터에서 내리거나 타면 <b style="color:#ff5050">계단의 기척</b>으로 알 수 있다.</li>
-        <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 비상실은 매 판 <b>전체 층의 딱 절반</b>만 열려 있다. 들어가서 <b>문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.</li>
+        <li><b>피구공</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 걸어온다. 위층에서 내려오기도 한다.</li>
+        <li>피구공은 당신이 어디 있는지 <b>정확히 모른다</b>. 발소리·인기척·손전등 불빛으로 <b>몇 층쯤 위인지 아래인지</b>만 짐작해 그쪽으로 간다. 문을 닫고 숨으면 아무것도 모른다.</li>
+        <li>엘리베이터 표시기는 <b>엘리베이터의 현재 층</b>을 보여준다. 피구공이 엘리베이터에서 내리거나 타면 <b style="color:#ff5050">계단의 기척</b>으로 알 수 있다.</li>
+        <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 비상실은 매 판 <b>전체 층의 딱 절반</b>만 열려 있다. 들어가서 <b>문을 닫으면</b> 피구공은 문 앞을 서성이다 떠난다.</li>
         <li>비상실 안쪽 벽의 <b>CCTV 모니터</b>로 <b>모든 층</b>의 비상문 앞을 볼 수 있다. <kbd>A</kbd><kbd>D</kbd>·휠로 층 이동, <kbd>Space</kbd>로 전체 층을 한 화면에.</li>
-        <li>난이도가 오를수록 송신은 더 멀리서 듣고, 덜 헷갈리고, 오래 기억하며, 당신이 갈 곳을 앞질러 간다. 하드부터는 비상실 문에 귀를 대 보기도 한다.</li>
-        <li>같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.</li>
-        <li>엘리베이터 <b>호출 버튼</b>으로 엘리베이터를 부를 수 있다. 송신도 버튼을 눌러야 엘리베이터를 탈 수 있다.</li>
+        <li>난이도가 오를수록 피구공은 더 멀리서 듣고, 덜 헷갈리고, 오래 기억하며, 당신이 갈 곳을 앞질러 간다. 하드부터는 비상실 문에 귀를 대 보기도 한다.</li>
+        <li>같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 피구공이 찾아와 문을 부수고 들어온다.</li>
+        <li>엘리베이터 <b>호출 버튼</b>으로 엘리베이터를 부를 수 있다. 피구공도 버튼을 눌러야 엘리베이터를 탈 수 있다.</li>
         <li>지금 몇 층인지는 벽에 칠해진 층 번호로만 알 수 있다.</li>
-        <li>송신은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가, 손전등은 빛이 눈에 띈다.</li>
+        <li>피구공은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가, 손전등은 빛이 눈에 띈다.</li>
         <li>배터리는 계단에는 드물다. 열린 <b>비상실 모니터 책상</b> 위에 비치된 배터리를 챙겨라.</li>
-        <li>체력이 바닥난 채로 달리면 넘어진다. 오른쪽 아래 수신기가 지직거릴수록 송신이 가깝다.</li>
+        <li>체력이 바닥난 채로 달리면 넘어진다. 오른쪽 아래 수신기가 지직거릴수록 피구공이 가깝다.</li>
         <li>일시정지 뒤에 너무 오래 숨지 마라.</li>
       </ul>
     </div>
@@ -566,7 +566,7 @@
   </section>
 
   <section id="dead" class="screen">
-    <div class="big">송신에게 피폭당했다</div>
+    <div class="big">피구공에게 피폭당했다</div>
     <div class="sub" id="dead-sub">계단은 아직 끝나지 않았다</div>
     <div class="stats"></div>
     <div class="end-menu">
@@ -583,7 +583,7 @@
       <button class="mi" data-act="retry" data-nav>다시 하기</button>
       <button class="mi" data-act="quit" data-nav>타이틀로</button>
     </div>
-    <div class="after">…송신은 아직 계단에 있다.</div>
+    <div class="after">…피구공은 아직 계단에 있다.</div>
   </section>
 
   <div id="cctv">

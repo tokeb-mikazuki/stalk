@@ -17,7 +17,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 /**
- * 「공포의 송신계단」 안드로이드 앱 — 게임(assets/index.html)을 전체 화면·가로 고정 WebView 로 띄운다.
+ * 「공포의 채널유기」 안드로이드 앱 — 게임(assets/index.html)을 전체 화면·가로 고정 WebView 로 띄운다.
  * 상태바·내비게이션 바를 숨기고(가장자리에서 쓸어 넘기면 잠깐 나왔다 다시 숨는다), 화면이 꺼지지 않게 한다.
  * 뒤로 가기: 게임 중이면 일시정지, 메뉴에서는 한 단계 뒤로, 타이틀이면 앱을 내린다.
  */

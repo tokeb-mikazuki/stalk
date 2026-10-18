@@ -108,7 +108,7 @@ export class Player {
     this.swayY = 0;
     this.beam = { x: 0, y: 0, vx: 0, vy: 0, lastYaw: null, lastPitch: 0, t: 0 }; // 손전등 빛줄기 흔들림(라디안)
     this.exert = 0; // 숨이 찬 정도 0..1 — 달리면 차오르고 걸으면 천천히 가라앉는다
-    this.fear = 0;  // 송신이 가까울수록 손이 떨린다 (main 이 넣어 준다)
+    this.fear = 0;  // 피구공이 가까울수록 손이 떨린다 (main 이 넣어 준다)
     this.shake = 0;
     this.frozen = false;
     this.roomK = -1; // 숨을 방 안에 있으면 그 층 번호
@@ -231,7 +231,7 @@ export class Player {
       ev.tripExhausted = true;
     }
 
-    // ----- 소음 반경 (송신의 청각) -----
+    // ----- 소음 반경 (피구공의 청각) -----
     let base = 0;
     if (this.speed > 0.3) base = this.crouching ? 3.5 : this.sprinting ? 17 : 8.5;
     this.noiseSpike = Math.max(0, this.noiseSpike - dt * 8);
