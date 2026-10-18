@@ -6,7 +6,7 @@
   <title>공포의 송신계단</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@600;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@600;900&display=swap" rel="stylesheet" />
   <style>
     :root {
       --accent: #43ff59;
@@ -158,11 +158,6 @@
     #pause .p-head h2 { font-family: var(--serif); font-weight: 900; font-size: clamp(30px, 3.4vw, 48px); letter-spacing: .2em; color: #e8e4d8; margin: 6px 0 4px; }
     #pause .p-info { font-size: 13px; color: #7f7b71; letter-spacing: .15em; margin-bottom: 4vh; }
     #pause .menu { width: min(360px, 80vw); }
-    #pause.breaking { animation: breakShake .07s infinite; background: rgba(40,0,0,.65); }
-    #pause.breaking h2 { color: #ff2b2b !important; text-shadow: 5px 0 rgba(0,255,255,.6), -5px 0 rgba(255,0,0,.9) !important; }
-    #pause.breaking .menu, #pause.breaking .p-info { animation: menuFall 1.5s ease-in forwards; }
-    @keyframes breakShake { 0% { transform: translate(0,0); } 25% { transform: translate(-9px,4px) skewX(3deg); } 50% { transform: translate(7px,-5px); } 75% { transform: translate(-4px,-3px) skewX(-5deg); } }
-    @keyframes menuFall { 0% { transform: none; opacity: 1; } 55% { transform: translateY(14px) rotate(-4deg); opacity: .9; } 100% { transform: translateY(110vh) rotate(28deg); opacity: 0; } }
 
     /* 사망 / 탈출 */
     #dead, #win { align-items: center; justify-content: center; text-align: center; padding: 24px; }
@@ -227,22 +222,17 @@
     /* 쪽지 */
     #note { position: fixed; inset: 0; z-index: 15; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
     #note.on { display: flex; animation: fadeIn .3s both; }
-    #note .paper { width: min(480px, 86vw); padding: 34px 36px 24px; background: #dcd5c2 linear-gradient(180deg, rgba(0,0,0,0) 70%, rgba(80,60,30,.12)); color: #1d1d22; font-family: var(--serif); font-size: 17px; line-height: 1.85; box-shadow: 0 14px 50px #000; transform: rotate(-1.2deg); }
-    #note h3 { font-size: 15px; color: #6a1a1a; margin-bottom: 14px; letter-spacing: .1em; font-weight: 900; }
+    #note .paper { width: min(480px, 86vw); padding: 34px 36px 24px; background: #dcd5c2 linear-gradient(180deg, rgba(0,0,0,0) 70%, rgba(80,60,30,.12)); color: #1d1d22; font-family: "Nanum Pen Script", var(--serif); font-size: clamp(22px, 1.4vw + .6vh, 28px); line-height: 1.45; box-shadow: 0 14px 50px #000; transform: rotate(-1.2deg); }
+    #note h3 { font-size: 1.15em; color: #6a1a1a; margin-bottom: 12px; letter-spacing: .03em; font-weight: 400; }
     #note p { white-space: pre-line; }
     #note .close { margin-top: 20px; font-family: var(--font); font-size: 12px; color: #5b574c; text-align: right; letter-spacing: .1em; }
 
     #scare { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; z-index: 50; }
     #scare.on { display: flex; }
     #scare img { width: min(90vw, 90vh); filter: grayscale(.85) contrast(1.4) brightness(.9); }
-    #clickhint { position: fixed; z-index: 25; left: 50%; top: 50%; transform: translate(-50%,-50%); padding: 12px 20px; background: var(--panel); border: 1px solid #444; display: none; font-size: 15px; }
+    #clickhint { position: fixed; z-index: 25; left: 50%; top: 64%; transform: translateX(-50%); padding: 6px 14px; color: #8a867c; display: none; font-size: 12px; letter-spacing: .15em; pointer-events: none; }
     #clickhint.on { display: block; }
-    #crack { position: fixed; inset: 0; z-index: 30; display: none; pointer-events: none; width: 100%; height: 100%; }
-    #crack.on { display: block; }
-    #crack path { stroke: rgba(255,255,255,.9); stroke-width: 2.5; fill: none; vector-effect: non-scaling-stroke; stroke-dasharray: 300; stroke-dashoffset: 300; animation: crack .45s forwards; filter: drop-shadow(0 0 2px #000); }
-    #crack path:nth-child(n+4) { animation-delay: .5s; }
-    #crack path:nth-child(n+7) { animation-delay: 1s; }
-    @keyframes crack { to { stroke-dashoffset: 0; } }
+    #note.on ~ #clickhint { display: none; }
     #cctv { position: fixed; inset: 0; z-index: 8; display: none; pointer-events: none; font-family: var(--mono); color: #cfe8d0; text-shadow: 0 0 4px #000; }
     #cctv.on { display: block; }
     #cctv .rec { position: absolute; top: 18px; left: 22px; color: #ff3b3b; font-size: 18px; animation: blink 1s steps(2) infinite; }
@@ -349,7 +339,7 @@
   </div>
 
   <div id="note"><div class="paper"><h3></h3><p></p><div class="close">[E] 또는 클릭하여 닫기</div></div></div>
-  <div id="clickhint">화면을 클릭하면 마우스 조작이 다시 잡힙니다</div>
+  <div id="clickhint">클릭하면 시점 조작이 다시 잡힌다</div>
 
   <!-- 메인 메뉴 -->
   <section id="title" class="screen shade-left">
@@ -507,17 +497,6 @@
     <div class="after">…송신은 아직 계단에 있다.</div>
   </section>
 
-  <svg id="crack" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-    <path d="M52 46 L58 38 L61 30 L68 22 L71 12 L78 0" />
-    <path d="M52 46 L44 40 L38 41 L30 33 L20 30 L8 22 L0 20" />
-    <path d="M52 46 L55 55 L52 63 L57 74 L55 86 L60 100" />
-    <path d="M52 46 L63 48 L72 45 L83 51 L92 49 L100 55" />
-    <path d="M52 46 L45 53 L37 56 L31 66 L20 72 L10 83 L0 86" />
-    <path d="M61 30 L66 33 L74 31" />
-    <path d="M38 41 L36 48 L28 52" />
-    <path d="M72 45 L76 38 L84 36 L90 28" />
-    <path d="M57 74 L64 79 L70 90 L73 100" />
-  </svg>
   <div id="cctv">
     <div class="rec">● REC</div>
     <div class="cam" id="cctv-cam">CAM</div>

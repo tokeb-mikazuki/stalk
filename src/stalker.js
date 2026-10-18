@@ -295,6 +295,7 @@ export class Stalker {
     this.visible = true;
     this.beginChase(true);
     this.windup = 1.0;
+    this.justSpotted = false; // 경고음·글리치 없이 조용히 시작
     this.updateMesh(0);
   }
 

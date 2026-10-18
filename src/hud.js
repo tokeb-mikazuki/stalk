@@ -110,6 +110,7 @@ export class Hud {
     this.note.querySelector('h3').textContent = title;
     this.note.querySelector('p').textContent = body;
     this.note.classList.add('on');
+    this.clickHint.classList.remove('on');
   }
 
   hideNote() {

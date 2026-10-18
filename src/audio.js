@@ -477,19 +477,27 @@ export class AudioEngine {
       pre.connect(lp).connect(bus);
       this.stepHits(pre, t, vol, pitch, surface);
     } else {
-      this.stepHits(bus, t, vol, pitch, surface);
+      this.stepHits(bus, t, vol, pitch, surface, kind === 'run');
     }
-    // 달릴 때 옷 스치는 소리
+    // 달릴 때: 묵직한 몸통 울림 + 낮은 옷깃 스침 (터벅터벅)
     if (kind === 'run') {
+      const o = ctx.createOscillator();
+      o.frequency.setValueAtTime(62 * pitch, t + 0.01);
+      o.frequency.exponentialRampToValueAtTime(34, t + 0.2);
+      const og = ctx.createGain();
+      this.env(og, t + 0.01, 0.008, vol * 0.9, 0.22);
+      o.connect(og).connect(bus);
+      o.start(t);
+      o.stop(t + 0.28);
       const n = this.noiseSrc();
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.value = 2200 + Math.random() * 800;
-      bp.Q.value = 0.8;
+      bp.frequency.value = 650 + Math.random() * 150;
+      bp.Q.value = 0.9;
       const g = ctx.createGain();
-      this.env(g, t, 0.03, vol * 0.12, 0.12);
+      this.env(g, t, 0.04, vol * 0.07, 0.16);
       n.connect(bp).connect(g).connect(bus);
-      n.start(t, Math.random() * 2, 0.2);
+      n.start(t, Math.random() * 2, 0.25);
     }
     const wet = surface === 'room' ? 0.15 : surface === 'landing' ? 0.45 : 0.6;
     this.out(dest, wet);
@@ -500,17 +508,21 @@ export class AudioEngine {
     }
   }
 
-  stepHits(bus, t, vol, pitch, surface) {
+  stepHits(bus, t, vol, pitch, surface, heavy = false) {
     const ctx = this.ctx;
+    // 무겁게 디딜 때는 고음(잡음·모래 긁힘)을 줄이고 저음을 키운다
+    const hiMul = heavy ? 0.45 : 1;
+    const lowMul = heavy ? 1.35 : 1;
+    const toneMul = heavy ? 0.6 : 1;
     const hit = (time, v, pm) => {
       // 신발 밑창이 닿는 소리 (대역 잡음)
       const n = this.noiseSrc();
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.value = (surface === 'room' ? 700 : surface === 'landing' ? 950 : 1150) * pm * pitch;
+      bp.frequency.value = (surface === 'room' ? 700 : surface === 'landing' ? 950 : 1150) * pm * pitch * toneMul;
       bp.Q.value = 1.1;
       const g = ctx.createGain();
-      this.env(g, time, 0.003, v * 0.55, 0.06);
+      this.env(g, time, 0.003, v * 0.55 * hiMul, 0.06);
       n.connect(bp).connect(g).connect(bus);
       n.start(time, Math.random() * 2, 0.1);
       // 모래 알갱이 긁힘
@@ -519,15 +531,15 @@ export class AudioEngine {
       hp.type = 'highpass';
       hp.frequency.value = 4200;
       const g2 = ctx.createGain();
-      this.env(g2, time, 0.001, v * 0.16, 0.025);
+      this.env(g2, time, 0.001, v * 0.16 * hiMul * hiMul, 0.025);
       n2.connect(hp).connect(g2).connect(bus);
       n2.start(time, Math.random() * 2, 0.05);
       // 몸무게가 실리는 저음
       const o = ctx.createOscillator();
-      o.frequency.setValueAtTime(115 * pitch * (pm > 1 ? 1.3 : 1), time);
-      o.frequency.exponentialRampToValueAtTime(48, time + 0.09);
+      o.frequency.setValueAtTime(115 * pitch * (pm > 1 ? 1.3 : 1) * (heavy ? 0.75 : 1), time);
+      o.frequency.exponentialRampToValueAtTime(heavy ? 40 : 48, time + (heavy ? 0.13 : 0.09));
       const og = ctx.createGain();
-      this.env(og, time, 0.003, v * (pm > 1 ? 0.3 : 0.75), 0.1);
+      this.env(og, time, 0.003, v * (pm > 1 ? 0.3 : 0.75) * lowMul, heavy ? 0.15 : 0.1);
       o.connect(og).connect(bus);
       o.start(time);
       o.stop(time + 0.14);
@@ -545,7 +557,7 @@ export class AudioEngine {
       }
     };
     hit(t, vol, 1); // 뒤꿈치
-    hit(t + 0.045 + Math.random() * 0.03, vol * 0.5, 1.7); // 앞꿈치
+    hit(t + (heavy ? 0.06 : 0.045) + Math.random() * 0.03, vol * (heavy ? 0.4 : 0.5), heavy ? 1.3 : 1.7); // 앞꿈치
   }
 
   /** 넘어짐: 미끄러짐 → 옷 펄럭 → 몸이 바닥에 부딪힘 → 손전등이 굴러감 → 신음 */

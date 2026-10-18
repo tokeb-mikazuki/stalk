@@ -549,46 +549,24 @@ class Game {
     this.lock();
   }
 
-  /** 일시정지 화면이 깨지며 송신이 덮친다 */
+  /**
+   * 일시정지(또는 쪽지 읽기)로 30초 넘게 숨으면: 그냥 풀리고, 담백한 한 줄과 함께 추격이 시작된다
+   */
   breakPause() {
-    this.state = 'breaching';
     this.run.breached = true;
     this.closeCctv();
-    const pauseEl = document.getElementById('pause');
-    const title = pauseEl.querySelector('h1');
-    this.hud.screen('pause');
-    pauseEl.classList.add('breaking');
-    title.textContent = '멈 추 지  마';
-    document.getElementById('crack').classList.add('on');
-    this.audio.ctx?.resume();
-    this.audio.glitch(0.9);
-    this.audio.sting(0.6);
-    const cleanup = () => {
-      document.getElementById('scare').classList.remove('on');
-      document.getElementById('crack').classList.remove('on');
-      pauseEl.classList.remove('breaking');
-      title.textContent = '일시정지';
-    };
-    setTimeout(() => {
-      if (this.state !== 'breaching') return cleanup();
-      const sc = document.getElementById('scare');
-      sc.classList.add('on');
-      this.audio.jumpscare();
-      setTimeout(() => {
-        cleanup();
-        if (this.state !== 'breaching') return;
-        this.hud.screen(null);
-        this.state = 'playing';
-        this.audio.silence(false);
-        this.touch.show(true);
-        this.stalker.ambush(this.player, this);
-        this.glitchPulse(1);
-        this.player.shake = 1;
-        this.hud.warn('FOUND YOU');
-        this.hud.msg('숨을 수 없다', 3);
-        if (!this.touch.enabled) this.hud.clickHint.classList.add('on');
-      }, 180);
-    }, 1500);
+    this.hud.hideNote();
+    this.noteT = 0;
+    if (this.state === 'paused') {
+      this.state = 'playing';
+      this.hud.screen(null);
+      this.audio.ctx?.resume();
+      this.touch.show(true);
+      if (!this.touch.enabled) this.hud.clickHint.classList.add('on');
+    }
+    document.body.classList.remove('menu-on');
+    this.stalker.ambush(this.player, this);
+    this.hud.msg('이것으로는 숨을 수 없다', 3.5);
   }
 
   debugJump() {
@@ -1043,6 +1021,8 @@ class Game {
     u.uFade.value = this.fadeIn;
 
     const reading = this.hud.noteOpen;
+    this.noteT = reading ? (this.noteT || 0) + dt : 0;
+    if (this.noteT > 30) this.breakPause();
     const ev = p.update(dt, reading ? {} : this.input, this.diff, this.world.fireDoors);
     if (p.torchOn) this.run.torchTime += dt;
     if (p.inRoom) this.run.enteredRoom = true;
