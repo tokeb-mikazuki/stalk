@@ -70,6 +70,8 @@ void main() {
   gl_FragColor = vec4(vec3(1.0, 0.95, 0.88) * b * 0.7, 1.0);
 }`;
 
+const FWD = new THREE.Vector3(0, 0, -1);
+
 export class TorchFX {
   constructor(scene, camera, torch) {
     this.camera = camera;
@@ -158,6 +160,13 @@ export class TorchFX {
     const lvl = active ? Math.min(1, this.torch.intensity / 30) : 0;
     this.beamMat.uniforms.uIntensity.value = lvl;
     this.beam.visible = this.beamOn && lvl > 0.01;
+    if (this.beam.visible) {
+      // 손전등이 흔들리면 빛줄기도 같이 흔들린다
+      const tp = this.torch.position;
+      this.beam.position.copy(tp);
+      this.tmpA.copy(this.torch.target.position).sub(tp).normalize();
+      this.beam.quaternion.setFromUnitVectors(FWD, this.tmpA);
+    }
     const u = this.dustMat.uniforms;
     u.uTime.value = t;
     u.uIntensity.value = lvl;

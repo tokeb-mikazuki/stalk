@@ -369,7 +369,7 @@ export class AudioEngine {
   }
 
   /**
-   * s: { voicePos, voiceOn, chasing, humPos, humOn, proximity(0..1), fear(0..1), breath(0..1), floorRatio }
+   * s: { voicePos, voiceOn, chasing, humPos, humOn, proximity(0..1), fear(0..1), exert(0..1), hold, floorRatio }
    */
   update(dt, s) {
     if (!this.ctx) return;
@@ -430,11 +430,17 @@ export class AudioEngine {
       this.heartbeat(0.25 + s.fear * 0.75);
     }
 
-    // 숨소리
+    // 숨소리: 늘 쉬고 있다. 평소엔 코로 조용히 느리게, 달리고 나면 입으로 거칠고 빠르게,
+    // 무서우면 떨리고, 숨어 있는데 송신이 가까우면 숨을 죽인다 (얕고 길게).
+    const b = Math.max(s.exert || 0, (s.fear || 0) * 0.5);
+    this.breathLvl = (this.breathLvl ?? 0) + (b - (this.breathLvl ?? 0)) * Math.min(1, dt * 1.5);
     this.breathT -= dt;
-    if (s.breath > 0.2 && this.breathT <= 0) {
-      this.breathT = 1.25 - s.breath * 0.55;
-      this.breath(s.breath);
+    if (this.breathT <= 0) {
+      const lv = this.breathLvl;
+      const hold = s.hold ? 1 : 0;
+      const period = (4.2 - 3.3 * lv) * (hold ? 1.7 : 1);
+      this.breathT = period * (0.92 + Math.random() * 0.16);
+      this.breath(lv, period, s.fear || 0, hold);
     }
 
     this.windGain.gain.setTargetAtTime(s.floorRatio * 0.18, t, 1);
@@ -728,22 +734,77 @@ export class AudioEngine {
     }
   }
 
-  breath(intensity) {
-    const ctx = this.ctx, t = ctx.currentTime;
-    const n = this.noiseSrc();
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 900;
-    bp.Q.value = 0.9;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.09 * intensity, t + 0.25);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
-    g.gain.exponentialRampToValueAtTime(0.06 * intensity, t + 0.7);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
-    n.connect(bp).connect(g);
-    this.out(g, 0.1);
-    n.start(t, Math.random() * 2, 1.1);
+  /**
+   * 한 번의 들숨·날숨. lv: 숨찬 정도(0 평온 ~ 1 헐떡임), P: 한 호흡 길이(초), fear: 떨림, hold: 숨죽임
+   * 들숨은 높고 좁은 바람 소리, 날숨은 낮고 넓게 — 숨이 차면 입으로 쉬어 소리가 굵어지고, 끝에 '하' 하는 성대음이 섞인다.
+   */
+  breath(lv, P, fear = 0, hold = 0) {
+    const ctx = this.ctx, t = ctx.currentTime + 0.02;
+    const mouth = Math.min(1, Math.max(0, (lv - 0.3) / 0.4)); // 코 → 입
+    const amp = (0.032 + 0.2 * Math.pow(lv, 1.3)) * (hold ? 0.4 : 1);
+    const bus = ctx.createGain();
+    bus.gain.value = 1;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 5200;
+    bus.connect(lp);
+    this.out(lp, 0.08);
+
+    const phase = (start, dur, peakAt, f1, f2, vol, shaky) => {
+      const n = this.noiseSrc();
+      const g = ctx.createGain();
+      for (const [f, q, w] of [[f1, 1.1, 1], [f2, 1.6, 0.55]]) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = f * (0.94 + Math.random() * 0.12);
+        bp.Q.value = q;
+        const wg = ctx.createGain();
+        wg.gain.value = w;
+        n.connect(bp).connect(wg).connect(g);
+      }
+      const e = g.gain;
+      e.setValueAtTime(0.0001, start);
+      e.linearRampToValueAtTime(vol, start + dur * peakAt);
+      e.setTargetAtTime(0.0001, start + dur * peakAt, dur * (1 - peakAt) * 0.38);
+      if (shaky > 0.05) {
+        // 떨리는 숨: 8~11Hz 로 끊기듯 흔들린다
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 8 + Math.random() * 3;
+        const lg = ctx.createGain();
+        lg.gain.value = vol * 0.6 * shaky;
+        lfo.connect(lg).connect(e);
+        lfo.start(start);
+        lfo.stop(start + dur + 0.1);
+      }
+      g.connect(bus);
+      n.start(start, Math.random() * Math.max(0, 2.6 - dur), dur + 0.3);
+    };
+
+    const shaky = Math.max(0, fear - 0.35) * 1.4 + hold * 0.4;
+    const inDur = P * (0.34 + 0.06 * (1 - lv)), exAt = P * 0.42, exDur = P * 0.5;
+    // 들숨: 코(높고 좁게) ↔ 입(낮고 넓게)
+    phase(t, inDur, 0.75, 1700 - 700 * mouth, 3300 - 900 * mouth, amp * (0.55 + 0.2 * mouth), shaky * 0.6);
+    // 날숨
+    phase(t + exAt, exDur, 0.14, 1050 - 450 * mouth, 2000 - 500 * mouth, amp, shaky);
+    // 헐떡일 때 날숨 끝의 '하아' (아주 작게 섞인 성대음)
+    if (lv > 0.62 && !hold) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(150 + Math.random() * 25, t + exAt);
+      o.frequency.linearRampToValueAtTime(118, t + exAt + exDur * 0.6);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 750;
+      f.Q.value = 2.2;
+      const g = ctx.createGain();
+      const v = amp * 0.12 * (lv - 0.62) / 0.38;
+      g.gain.setValueAtTime(0.0001, t + exAt);
+      g.gain.linearRampToValueAtTime(v, t + exAt + exDur * 0.1);
+      g.gain.setTargetAtTime(0.0001, t + exAt + exDur * 0.18, exDur * 0.12);
+      o.connect(f).connect(g).connect(bus);
+      o.start(t + exAt);
+      o.stop(t + exAt + exDur);
+    }
   }
 
   ding(pos, distorted = false) {

@@ -1610,6 +1610,7 @@ class Game {
     const targetFear = Math.max(prox, s.chasing ? 0.55 + prox * 0.45 : 0);
     this.fear += (targetFear - this.fear) * Math.min(1, dt * 2);
     u.uFear.value = this.fear;
+    p.fear = this.fear;
     const close = s.visible ? Math.max(0, 1 - d / 7) : 0;
     u.uRed.value += ((s.chasing ? close : close * 0.4) - u.uRed.value) * Math.min(1, dt * 5);
     if (s.visible && d < 3) p.shake = Math.max(p.shake, 0.7);
@@ -1668,7 +1669,8 @@ class Game {
       humOn: this.elevator.moving,
       proximity: s.inElevator ? prox * 0.5 : prox,
       fear: this.fear,
-      breath: Math.max(0, 1 - p.stamina / 45) * (p.exhausted ? 1 : 0.7),
+      exert: p.exert,
+      hold: hidden && s.visible && d < 14, // 숨어 있는데 송신이 문 너머에 — 숨을 죽인다
       floorRatio: fl / (FLOORS - 1),
     });
 

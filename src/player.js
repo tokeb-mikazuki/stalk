@@ -106,6 +106,9 @@ export class Player {
     this.bob = 0;
     this.swayX = 0;
     this.swayY = 0;
+    this.beam = { x: 0, y: 0, vx: 0, vy: 0, lastYaw: null, lastPitch: 0, t: 0 }; // 손전등 빛줄기 흔들림(라디안)
+    this.exert = 0; // 숨이 찬 정도 0..1 — 달리면 차오르고 걸으면 천천히 가라앉는다
+    this.fear = 0;  // 송신이 가까울수록 손이 떨린다 (main 이 넣어 준다)
     this.shake = 0;
     this.frozen = false;
     this.roomK = -1; // 숨을 방 안에 있으면 그 층 번호
@@ -400,6 +403,8 @@ export class Player {
 
     const sp = Math.min(1, this.speed / WALK);
     this.bob += dt * this.speed * 2.3;
+    const load = this.exhausted ? 1 : this.sprinting ? 1 : this.speed > 0.5 ? 0.22 : 0;
+    this.exert += (load - this.exert) * Math.min(1, dt * (load > this.exert ? 0.2 : 0.06));
     const bobY = Math.sin(this.bob * 2) * 0.045 * sp * (this.sprinting ? 1.4 : 1);
     const bobX = Math.cos(this.bob) * 0.03 * sp;
 
@@ -451,7 +456,34 @@ export class Player {
       this.vmBase.y + bobY * 0.5 - lower - this.swayY - down * 0.45,
       this.vmBase.z,
     );
-    vm.rotation.set(this.sprinting ? -0.35 : 0, this.sprinting ? 0.3 : 0, 0);
+
+    // 손전등: 걸음마다 손이 좌우로 흔들리며 8자를 그리고(달리면 크게, 불규칙하게), 고개를 돌리면 빛이 한 박자 늦게 따라온다.
+    // 멈춰 있으면 숨결에 따라 아주 천천히 오르내리고, 무서우면 손이 떤다.
+    const b = this.beam;
+    b.t += dt;
+    if (b.lastYaw === null) b.lastYaw = this.yaw;
+    let dYaw = this.yaw - b.lastYaw;
+    dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
+    const dPitch = this.pitch - b.lastPitch;
+    b.lastYaw = this.yaw;
+    b.lastPitch = this.pitch;
+    b.x = Math.max(-0.16, Math.min(0.16, b.x - dYaw * 0.45));
+    b.y = Math.max(-0.12, Math.min(0.12, b.y - dPitch * 0.4));
+    b.vx += (-90 * b.x - 11 * b.vx) * dt; // 살짝 넘쳤다 돌아오는 스프링
+    b.vy += (-90 * b.y - 11 * b.vy) * dt;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    const run = this.sprinting ? 1 : 0;
+    const ax = sp * (run ? 0.1 : 0.03), ay = sp * (run ? 0.075 : 0.022);
+    const rough = run ? Math.sin(b.t * 7.3) * 0.024 + Math.sin(b.t * 11.9 + 1.3) * 0.016 : 0;
+    const breathe = Math.sin(b.t * (1.4 + this.exert * 2.6)) * (0.004 + this.exert * 0.012);
+    const fr = Math.max(0, this.fear - 0.25);
+    const tremor = fr * (Math.sin(b.t * 23.1) * 0.006 + Math.sin(b.t * 31.7 + 2) * 0.004);
+    const ox = b.x + Math.sin(this.bob) * ax + Math.sin(this.bob * 2 + 0.9) * ax * 0.25 + rough + tremor;
+    const oy = b.y + Math.sin(this.bob * 2 + 0.6) * ay + breathe + rough * 0.7 + tremor * 0.8;
+    this.torch.target.position.set(0.02 + Math.tan(ox) * 7, -0.06 + Math.tan(oy) * 7, -7);
+    this.torch.position.set(0.24 + (vm.position.x - this.vmBase.x), -0.215 + (vm.position.y - this.vmBase.y), -0.72);
+    vm.rotation.set((this.sprinting ? -0.35 : 0) + oy, (this.sprinting ? 0.3 : 0) - ox, -ox * 0.5);
 
     const on = this.torchOn;
     const batt = Math.min(1, 0.35 + this.battery / 60);
