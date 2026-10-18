@@ -319,7 +319,7 @@ export function buildWorld(scene) {
     const roll = rand();
     const kind = k === 0 || k === FLOORS - 1 ? 'steady' : roll < 0.22 ? 'dead' : roll < 0.5 ? 'flicker' : 'steady';
     lamps.push({
-      k, kind, bulbMat, halo, color: 0xffdcae, power: 7, room: false,
+      k, kind, bulbMat, halo, color: 0xffdcae, power: 2.4, room: false, tint: [1.4, 1.3, 1.1],
       pos: polar(R_OUT - 0.55, lampAngle, y + 2.95, new THREE.Vector3()),
       seed: rand() * 100, level: 1,
     });
@@ -456,11 +456,23 @@ function buildFireRoom(root, mat, doorMats, k, rand, lamps) {
   }
 
   // 복도 벽의 CCTV 모니터 (문 앞 계단참을 비춤)
-  const monitor = box(0.06, 0.34, 0.46, mat.frame, hw - 0.02, 1.5, -0.8);
+  // 모니터는 방 안쪽 오른쪽 벽 (문과 충분히 떨어뜨려 조작 실수 방지)
+  const monZ = cz + 0.3;
+  const monitor = box(0.06, 0.34, 0.46, mat.frame, ROOM_X1 - 0.03, 1.5, monZ);
   const screenMat = new THREE.MeshBasicMaterial({ color: 0x0a0f0c });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.28), screenMat);
-  screen.position.set(hw - 0.056, 1.5, -0.8);
+  screen.position.set(ROOM_X1 - 0.064, 1.5, monZ);
   screen.rotation.y = -Math.PI / 2;
+  const monTable = box(0.36, 0.72, 0.62, mat.wood, ROOM_X1 - 0.18, 0.36, monZ);
+  // 모니터 옆 대기 표시등 (어둠 속에서 모니터 위치를 알려줌)
+  const ledMat = new THREE.MeshBasicMaterial({ color: 0x4080ff });
+  const led = box(0.02, 0.03, 0.03, ledMat, ROOM_X1 - 0.06, 1.3, monZ + 0.18);
+  led.castShadow = false;
+  // 방 안쪽에서 보이는 비상구 표시등 (출구 위)
+  const exitIn = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.2), doorMats.exitOn);
+  exitIn.position.set(0, HOLE_H + 0.27, -L - 0.012);
+  exitIn.rotation.y = Math.PI;
+  parts.push(monTable, led, exitIn);
   // 문 위 왼쪽에 달린 CCTV 카메라: 문 앞과 엘리베이터 쪽 계단참을 함께 비춘다
   const camBox = box(0.12, 0.1, 0.18, mat.frame, -hw - 0.3, HOLE_H + 0.42, 0.12);
   const recMat = new THREE.MeshBasicMaterial({ color: 0x550000 });
@@ -482,10 +494,20 @@ function buildFireRoom(root, mat, doorMats, k, rand, lamps) {
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff3020, transparent: true, opacity: 0, depthWrite: false }));
   halo.visible = false;
   const roomLamp = {
-    k, kind: rand() < 0.25 ? 'flicker' : 'steady', bulbMat, halo, color: 0xff3828, power: 2.2, room: true,
+    k, kind: rand() < 0.25 ? 'flicker' : 'steady', bulbMat, halo, color: 0xff3828, power: 3.4, room: true, tint: [1.6, 0.25, 0.2],
     pos: lampWorld, seed: rand() * 100, level: 1,
   };
   lamps.push(roomLamp);
+  // 모니터 쪽 푸른 보조등 + 출구 쪽 초록 보조등
+  const noHalo = () => { const h = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, opacity: 0 })); h.visible = false; return h; };
+  lamps.push({
+    k, kind: 'steady', bulbMat: ledMat, halo: noHalo(), color: 0x7fa8ff, power: 1.3, room: true, tint: [0.4, 0.8, 1.8],
+    pos: g.localToWorld(new THREE.Vector3(ROOM_X1 - 0.6, 1.9, monZ)), seed: rand() * 100, level: 1,
+  });
+  lamps.push({
+    k, kind: 'steady', bulbMat: doorMats.exitOn, halo: noHalo(), color: 0x3cff7a, power: 0.9, room: true, tint: null,
+    pos: g.localToWorld(new THREE.Vector3(0, HOLE_H + 0.1, -L - 0.4)), seed: rand() * 100, level: 1,
+  });
 
   const handle = fromRoomLocal(0, 0);
   return {
@@ -493,7 +515,7 @@ function buildFireRoom(root, mat, doorMats, k, rand, lamps) {
     pos: new THREE.Vector3(handle.x, y + 1.05, handle.z),
     lamp: roomLamp,
     screen, screenMat, recMat,
-    monitorPos: g.localToWorld(new THREE.Vector3(hw - 0.06, 1.5, -0.8)),
+    monitorPos: g.localToWorld(new THREE.Vector3(ROOM_X1 - 0.08, 1.5, monZ)),
     cctvPos: g.localToWorld(new THREE.Vector3(-hw - 0.3, HOLE_H + 0.32, 0.32)),
     cctvTarget: g.localToWorld(new THREE.Vector3(1.3, 0.55, 2.4)),
   };

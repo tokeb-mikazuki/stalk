@@ -25,10 +25,6 @@
     #floor .num { font-size: 44px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,0,0,.9); }
     #floor .goal { font-size: 13px; color: var(--sub); letter-spacing: 1px; }
     #floor .goal { font-size: 14px; color: #a9a9a0; }
-    #risk { display: none; }
-    #risk.on { display: block; }
-    #risk .fill { background: #b9a26a; }
-    #risk.hot .fill { background: var(--red); animation: blink .5s infinite; }
     @keyframes blink { 50% { opacity: .35; } }
     #meters { position: absolute; left: 26px; bottom: 26px; width: 260px; }
     .meter { margin-top: 8px; }
@@ -200,7 +196,6 @@
   <div id="hud">
     <div id="floor"><div class="num">1F</div><div class="goal">목표: 20F 옥상</div></div>
     <div id="meters">
-      <div class="meter" id="risk"><div class="lbl"><span>발각 위험 — 같은 층에 오래 머무는 중</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
       <div class="meter" id="stamina"><div class="lbl"><span>체력</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
       <div class="meter" id="battery"><div class="lbl"><span>손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
     </div>
@@ -247,7 +242,7 @@
         <kbd>마우스</kbd><span>시점 회전</span>
         <kbd>Shift</kbd><span>달리기 (체력 소모)</span>
         <kbd>C / Ctrl</kbd><span>웅크리기 (조용히 이동)</span>
-        <kbd>F</kbd><span>손전등 켜기/끄기</span>
+        <kbd>마우스 좌클릭</kbd><span>손전등 켜기/끄기 (F 키도 가능)</span>
         <kbd>E</kbd><span>줍기 · 읽기 · 문 열기</span>
         <kbd>Esc</kbd><span>일시정지</span>
       </div>
@@ -257,7 +252,7 @@
         · 엘리베이터 표시기에 층수가 뜨면 송신은 엘리베이터 안에 있다. <b>Err</b>가 뜨면 계단 어딘가에 있다.<br />
         · <b>비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>[E]로 문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.<br />
         · 비상실 복도 벽의 <b>CCTV 모니터</b>로 문 앞 계단참을 볼 수 있다. 송신이 떠났는지 확인하고 나가라.<br />
-        · 같은 층에 너무 오래 머물면(발각 위험 막대) 송신이 찾아와 문을 부수고 들어온다.<br />
+        · 같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.<br />
         · 일시정지 화면 뒤에 너무 오래 숨지 마라.<br />
         · 송신은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가 멀리 퍼지고, 손전등 빛도 눈에 띈다.<br />
         · 오른쪽 아래 수신기가 지직거릴수록 송신이 가까이 있다.<br />

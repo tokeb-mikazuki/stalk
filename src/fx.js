@@ -144,7 +144,7 @@ export class TorchFX {
 
   update(dt, active, pixelRatio) {
     const t = (this.beamMat.uniforms.uTime.value += dt);
-    const lvl = active ? Math.min(1, this.torch.intensity / 22) : 0;
+    const lvl = active ? Math.min(1, this.torch.intensity / 34) : 0;
     this.beamMat.uniforms.uIntensity.value = lvl;
     this.beam.visible = this.beamOn && lvl > 0.01;
     const u = this.dustMat.uniforms;

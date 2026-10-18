@@ -21,7 +21,8 @@ export class Player {
     camera.rotation.order = 'YXZ';
 
     // 손전등 (카메라에 붙음)
-    this.torch = new THREE.SpotLight(0xfff0d8, 30, 24, 0.5, 0.55, 1.6);
+    // 넓게 퍼지는 손전등 (가장자리는 부드럽게)
+    this.torch = new THREE.SpotLight(0xfff0d8, 34, 28, 0.78, 0.8, 1.5);
     this.torch.position.set(0.24, -0.215, -0.72);
     this.torch.target.position.set(0.02, -0.06, -7);
     this.torch.castShadow = true;
@@ -213,7 +214,10 @@ export class Player {
     }
     // 체력이 바닥난 채로 달리려 하면 다리가 꼬인다
     const tryRun = (input.sprint || stickRun) && moving && mz > 0 && !this.crouching;
-    if (tryRun && this.exhausted && !tripping && Math.random() < diff.exhaustTripChance * dt) this.trip(ev);
+    if (tryRun && this.exhausted && !tripping && Math.random() < diff.exhaustTripChance * dt) {
+      this.trip(ev);
+      ev.tripExhausted = true;
+    }
 
     // ----- 소음 반경 (송신의 청각) -----
     let base = 0;
@@ -387,7 +391,7 @@ export class Player {
 
     const on = this.torchOn;
     const batt = Math.min(1, 0.35 + this.battery / 60);
-    this.torch.intensity = on ? 22 * batt * this.torchFlicker : 0;
+    this.torch.intensity = on ? 34 * batt * this.torchFlicker : 0;
     this.lensMat.color.setScalar(on ? 2.8 * this.torchFlicker : 0.08); // 블룸으로 빛남
   }
 }

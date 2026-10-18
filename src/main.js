@@ -204,7 +204,7 @@ class Game {
       if (e.code === 'KeyE') this.interact();
       if (e.code === 'KeyF' && !this.hud.noteOpen) {
         if (this.player.toggleTorch()) this.audio.torchClick();
-        else this.hud.msg('배터리가 없다.');
+        else this.hud.msg('배터리 없음', 1.8);
       }
       if (e.code === 'KeyP') this.pause();
     });
@@ -226,6 +226,13 @@ class Game {
       if (Math.abs(mx) > 250 || Math.abs(my) > 250 || performance.now() - this.lockTime < 120) return;
       const sens = 0.0022 * this.settings.sens;
       this.player.look(mx, my * (this.settings.invert ? -1 : 1), sens);
+    });
+    // 마우스 좌클릭 = 손전등 켜기/끄기 (마우스가 잠긴 상태에서)
+    document.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || this.state !== 'playing' || this.cctv || this.hud.noteOpen) return;
+      if (document.pointerLockElement !== canvas) return;
+      if (this.player.toggleTorch()) this.audio.torchClick();
+      else this.hud.msg('배터리 없음', 1.8);
     });
     canvas.addEventListener('click', () => {
       this.hud.clickHint.classList.remove('on');
@@ -442,9 +449,9 @@ class Game {
         }
       } catch { /* 전체 화면 미지원 */ }
     }
-    this.director.after(1.2, () => this.hud.msg('…여기는 어디지.', 2.6));
-    this.director.after(4.2, () => this.hud.msg(`목표: ${FLOORS}층 옥상 문까지 올라가 탈출한다.`, 4));
-    this.director.after(8.8, () => this.hud.msg('비상구 표시등이 켜진 문 안으로 숨을 수 있다. [E]로 문을 여닫는다.', 4.5));
+    this.director.after(1.5, () => this.hud.msg(`목표: ${FLOORS}F 옥상 문으로 탈출`, 3.5));
+    this.director.after(5.5, () => this.hud.msg('엘리베이터 표시기 — 숫자: 송신이 엘리베이터 안 · Err: 계단 위', 4.5));
+    this.director.after(10.5, () => this.hud.msg('초록 비상구 표시 문 = 숨을 곳 · [E] 열기/닫기', 4));
   }
 
   pause() {
@@ -453,9 +460,9 @@ class Game {
     this.state = 'paused';
     this.hud.screen('pause');
     this.touch.show(false);
-    // 너무 오래 멈춰 있으면… (35~60초)
+    // 30초 넘게 멈춰 있으면 화면이 깨진다
     this.pauseT = 0;
-    this.pauseLimit = 35 + Math.random() * 25;
+    this.pauseLimit = 30;
     this.audio.ctx?.suspend();
     this.unlock();
   }
@@ -505,7 +512,7 @@ class Game {
         this.glitchPulse(1);
         this.player.shake = 1;
         this.hud.warn('FOUND YOU');
-        this.hud.msg('멈춰 있는 동안… 그가 왔다. 뛰어!', 3);
+        this.hud.msg('숨을 수 없다', 3);
         if (!this.touch.enabled) this.hud.clickHint.classList.add('on');
       }, 180);
     }, 1500);
@@ -645,7 +652,7 @@ class Game {
       if (it.type === 'battery') {
         p.battery = Math.min(100, p.battery + 45);
         a.pickup();
-        this.hud.msg('손전등 배터리를 갈아 끼웠다. (+45%)', 2.4);
+        this.hud.msg('배터리 +45%', 1.8);
       } else {
         a.paper();
         const n = NOTES[it.idx];
@@ -657,7 +664,7 @@ class Game {
       if (d.locked) {
         a.rattle(d.pos);
         p.addNoise(9);
-        this.hud.msg(['잠겨 있다.', '꿈쩍도 하지 않는다. 다른 층으로 가야 한다.'][Math.floor(Math.random() * 2)], 2.2);
+        this.hud.msg('잠긴 문 — 다른 층으로', 2);
         return;
       }
       if (d.target > 0) {
@@ -755,7 +762,7 @@ class Game {
     this.glitchPulse(0.8);
     this.director.flicker(2.5);
     this.hud.warn(reason === 'final' ? 'RUN' : 'FOUND YOU');
-    if (reason === 'hide') this.hud.msg('송신이 당신을 찾았다. 당장 나가!', 3.2);
+    if (reason === 'hide') this.hud.msg('들켰다 — 지금 이동하라', 3);
     if (this.settings.voice) speak(Math.random() < 0.5 ? '찾았다' : '어디 가');
   }
 
@@ -801,13 +808,13 @@ class Game {
 
   onChaseEnd(how) {
     if (how === 'hid') {
-      this.hud.msg('…문 밖에서 무언가 서성인다. 숨을 죽여라.', 3.5);
+      this.hud.msg('송신이 문 앞에 있다 — CCTV로 확인', 3);
       return;
     }
     this.chases++;
     if (how === 'vanish') this.audio.glitch(0.35);
     this.director.after(2, () => {
-      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg(how === 'lost' ? '…따돌린 것 같다.' : '…사라졌다?', 2.5);
+      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg(how === 'lost' ? '따돌렸다' : '송신이 사라졌다', 2);
     });
   }
 
@@ -816,7 +823,7 @@ class Game {
     this.run.hides++;
     this.hides++;
     this.director.after(1.5, () => {
-      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg('…발소리가 멀어졌다. 계속 올라가야 한다.', 3);
+      if (this.state === 'playing' && !this.stalker.chasing) this.hud.msg('송신이 떠났다', 2);
     });
   }
 
@@ -835,12 +842,27 @@ class Game {
     this.dieT = 0;
     this.touch.show(false);
     this.player.frozen = true;
+    this.player.viewModel.visible = false;
     this.hud.setPrompt('');
     this.hud.show(false);
     this.hud.hideNote();
-    this.audio.jumpscare();
+    this.audio.sting(0.7);
     this.audio.silence(true);
-    this.glitch = 1;
+    this.glitch = 0.6;
+    // 사망 연출 준비: 고개가 송신 쪽으로 돌아가고 → 송신이 덮쳐 오며 → 뒤로 넘어짐
+    const cam = this.camera;
+    this.dieCam0 = cam.position.clone();
+    this.dieQ0 = cam.quaternion.clone();
+    const target = this.stalker.pos.clone();
+    target.y = Math.max(target.y, cam.position.y - 0.2);
+    if (target.distanceTo(cam.position) < 0.2) target.copy(cam.position).add(cam.getWorldDirection(new THREE.Vector3()));
+    const m = new THREE.Matrix4().lookAt(cam.position, target, new THREE.Vector3(0, 1, 0));
+    this.dieQLook = new THREE.Quaternion().setFromRotationMatrix(m);
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.dieQLook);
+    this.dieBack = fwd.clone().setY(0).normalize().multiplyScalar(-1);
+    this.dieSide = Math.random() < 0.5 ? -1 : 1;
+    this.dieHit = false;
+    this.dieStutter = 0;
   }
 
   win() {
@@ -956,15 +978,16 @@ class Game {
     if (ev.trip) {
       this.audio.thud();
       this.director.after(0.32, () => this.audio.thud());
-      this.hud.msg(p.stamina < 5 ? '다리가 풀려 넘어졌다…!' : '넘어졌다!', 2.2);
+      if (ev.tripExhausted && !this.hints.has('tripTip')) this.hint('tripTip', 'TIP: 체력이 바닥난 채로 달리면 넘어질 수 있다', 4.5);
+      else this.hud.msg('넘어졌다', 1.8);
       this.glitchPulse(0.35);
     }
-    if (p.inRoom) this.hint('room', '[E]로 문을 닫으면 송신은 들어오지 못한다. 하지만 오래 머물면…', 4.5);
+    if (p.inRoom) this.hint('room', '[E] 문 닫기 → 송신이 못 들어옴 · 오래 숨으면 들킨다 · 모니터 = CCTV', 4.5);
 
     // 마지막 추격: 높은 층에 다다르면 송신이 위에서 내려온다
     if (!this.finalStarted && p.maxFloor >= this.diff.finalFloor) {
       this.finalStarted = true;
-      this.hud.msg('…위층에서 엘리베이터가 내려오고 있다.', 3.5);
+      this.hud.msg('송신이 위층에서 내려온다 — 계속 올라가라', 3.5);
       this.director.after(2.5, () => this.triggerHunt('final', 2));
     }
 
@@ -977,14 +1000,14 @@ class Game {
       this.audio.laughAt(s.pos, 1);
       this.glitchPulse(0.5);
       p.shake = Math.max(p.shake, 0.5);
-      this.hint('chase', '도망쳐! 열린 비상문으로 들어가 문을 닫아라!', 3.5);
+      this.hint('chase', '추격 — 달려서 따돌리거나 비상문에 숨어 문을 닫아라', 3.5);
     }
 
     // ---- 근접도 / 공포 ----
     let d;
     if (s.inElevator) d = Math.abs(s.elevFloor * FLOOR_H - p.footY) * 1.3 + 6;
     else d = s.distTo(p);
-    if (s.visible && d < 26 && !s.chasing) this.hint('see', '송신이다. 들키기 전에 피하거나 비상문 안으로 숨어라.', 4);
+    if (s.visible && d < 26 && !s.chasing) this.hint('see', '송신 — 들키기 전에 피하라', 3);
     const hidden = p.inRoom && this.world.fireDoors[p.roomK].open < 0.3;
     const prox = Math.max(0, Math.min(1, 1 - d / 30)) * (hidden ? 0.75 : 1);
     const targetFear = Math.max(prox, s.chasing ? 0.55 + prox * 0.45 : 0);
@@ -1032,8 +1055,6 @@ class Game {
     this.hud.setStamina(p.stamina, p.exhausted);
     this.hud.setBattery(p.battery);
     this.hud.setDetector(s.inElevator ? prox * 0.6 : prox);
-    const risk = fl >= 1 ? p.floorTime / this.diff.hideThreshold : 0;
-    this.hud.setRisk(risk, p.inRoom);
 
     // ---- 사운드 ----
     this.audio.updateListener(this.camera);
@@ -1067,26 +1088,59 @@ class Game {
 
   updateDying(dt) {
     this.dieT += dt;
+    const t = this.dieT;
     const cam = this.camera, s = this.stalker, u = this.post.uniforms;
-    // 얼굴이 화면을 가득 채운다
-    const fwd = cam.getWorldDirection(new THREE.Vector3());
-    const dist = Math.max(0.5, 1.4 - this.dieT * 4);
+    const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+
+    // 1) 고개가 송신 쪽으로 홱 돌아간다
+    cam.quaternion.slerpQuaternions(this.dieQ0, this.dieQLook, ease(t / 0.25));
+    // 2) 뒤로 넘어지며 주저앉는다 (고개가 들리고 기울어짐)
+    const fall = ease((t - 0.55) / 0.8);
+    cam.position.copy(this.dieCam0).addScaledVector(this.dieBack, fall * 0.5);
+    cam.position.y -= fall * 0.85;
+    const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(fall * 0.38, 0, fall * 0.32 * this.dieSide));
+    cam.quaternion.multiply(tilt);
+    // 3) 흔들림 (덮치는 순간 최대)
+    const shake = t < 0.4 ? 0.35 : t < 1.2 ? 1 : 0.55;
+    cam.position.x += (Math.random() - 0.5) * 0.07 * shake;
+    cam.position.y += (Math.random() - 0.5) * 0.07 * shake;
+    const jit = new THREE.Quaternion().setFromEuler(new THREE.Euler((Math.random() - 0.5) * 0.06 * shake, (Math.random() - 0.5) * 0.06 * shake, (Math.random() - 0.5) * 0.08 * shake));
+    cam.quaternion.multiply(jit);
+
+    // 4) 송신이 멀리서 순식간에 덮쳐 온다
+    const lunge = t < 0.35 ? 0 : Math.pow(Math.min(1, (t - 0.35) / 0.7), 2.4);
+    const dist = 2.1 + (0.62 - 2.1) * lunge;
+    if (t > 0.35 && !this.dieHit) {
+      this.dieHit = true;
+      this.audio.jumpscare();
+    }
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
     const g = s.group;
-    g.visible = this.dieT < 1.5;
-    g.position.copy(cam.position).addScaledVector(fwd, dist);
-    g.position.y += (Math.random() - 0.5) * 0.04;
+    g.visible = u.uFade.value < 0.98;
+    g.position.copy(cam.position).addScaledVector(fwd, dist).addScaledVector(up, 0.22 + Math.sin(t * 22) * 0.03 * lunge);
     g.quaternion.copy(cam.quaternion);
-    const sc = 0.5 + Math.random() * 0.05;
-    s.body.scale.setScalar(sc);
-    s.body.position.set(0, 0, 0);
-    s.body.rotation.set(0, 0, (Math.random() - 0.5) * 0.15);
-    s.faceMat.color.setScalar(1.3);
-    cam.rotation.z = (Math.random() - 0.5) * 0.08;
-    u.uRed.value = 1;
+    s.faceMat.color.setScalar(1.15 + lunge * 0.5);
+    // 마지막 순간: 프레임이 끊기듯 튄다
+    if (t > 1.05) {
+      this.dieStutter -= dt;
+      if (this.dieStutter <= 0) {
+        this.dieStutter = 0.05 + Math.random() * 0.05;
+        s.body.position.set((Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.1, 0);
+        s.body.scale.setScalar(0.95 + Math.random() * 0.3);
+        s.body.rotation.set(0, 0, (Math.random() - 0.5) * 0.3);
+      }
+    } else {
+      s.body.position.set(0, 0, 0);
+      s.body.scale.setScalar(1);
+      s.body.rotation.set(0, 0, Math.sin(t * 26) * 0.1 * lunge);
+    }
+
+    u.uRed.value = Math.min(1, t * 2.2);
     u.uFear.value = 1;
-    this.glitch = Math.max(this.glitch, 0.7);
-    if (this.dieT > 1.5) u.uFade.value = Math.min(1, (this.dieT - 1.5) * 2);
-    if (this.dieT > 2.1 && this.state === 'dying') {
+    this.glitch = Math.max(this.glitch, t > 0.35 ? 0.4 + lunge * 0.6 : 0.3);
+    u.uFade.value = t > 1.3 ? Math.min(1, (t - 1.3) * 4) : 0;
+    if (this.dieT > 1.9 && this.state === 'dying') {
       this.state = 'dead';
       s.faceMat.color.setScalar(0.8);
       this.unlock();
@@ -1147,9 +1201,8 @@ class Game {
         v = Math.random() < 0.004 ? 0.6 : 0;
       }
       l.level = v * mul;
-      if (l.room) l.bulbMat.color.setRGB(l.level * 1.6, l.level * 0.25, l.level * 0.2);
-      else l.bulbMat.color.setRGB(l.level * 1.4, l.level * 1.3, l.level * 1.1);
-      l.halo.material.opacity = 0.5 * l.level;
+      if (l.tint) l.bulbMat.color.setRGB(l.level * l.tint[0], l.level * l.tint[1], l.level * l.tint[2]);
+      l.halo.material.opacity = 0.3 * l.level;
     }
     // 카메라에서 가까운 조명에만 실제 광원 배치
     const cp = this.camera.position;
@@ -1159,7 +1212,7 @@ class Game {
       light.position.copy(l.pos);
       light.color.setHex(l.color);
       light.intensity = l.power * l.level;
-      light.distance = l.room ? 6 : 11;
+      light.distance = l.room ? 5 : 7;
     });
   }
 

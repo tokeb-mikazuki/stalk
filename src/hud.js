@@ -6,8 +6,6 @@ export class Hud {
     this.el = $('#hud');
     this.floorNum = $('#floor .num');
     this.goalEl = $('#floor .goal');
-    this.riskEl = $('#risk');
-    this.riskFill = $('#risk .fill');
     this.stFill = $('#stamina .fill');
     this.btFill = $('#battery .fill');
     this.btVal = $('#battery .v');
@@ -51,14 +49,6 @@ export class Hud {
       this.lastGoal = t;
       this.goalEl.textContent = t;
     }
-  }
-
-  /** 같은 층 체류 위험도 (원작의 HIDE_THRESH 시각화) */
-  setRisk(ratio, inRoom) {
-    const show = inRoom || ratio > 0.4;
-    this.riskEl.classList.toggle('on', show);
-    this.riskFill.style.width = `${Math.min(100, ratio * 100)}%`;
-    this.riskEl.classList.toggle('hot', ratio > 0.72);
   }
 
   setStamina(v, exhausted) {
