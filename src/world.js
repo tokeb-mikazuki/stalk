@@ -328,8 +328,10 @@ export function buildWorld(scene) {
     if (k > 0) addClutter(root, mat, k, rand);
   }
 
+  const car = buildCar(root, mat);
+
   return {
-    root, mat, tex, elevators, fireDoors, signs, lamps, indicator, roof, doorMats,
+    root, mat, tex, elevators, fireDoors, signs, lamps, indicator, roof, doorMats, car,
     paperTex: [1, 2, 3, 4, 5, 6].map((s) => paperTexture(s * 13)),
   };
 }
@@ -353,14 +355,6 @@ function buildElevator(root, mat, indicatorMat, k) {
   right.position.set(hw / 2, 1.14, -0.02);
   for (const m of [pl, pr, lintel, left, right]) { m.castShadow = true; m.receiveShadow = true; }
 
-  // 엘리베이터 내부 (벽 뒤)
-  const car = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 1.5), mat.car);
-  car.position.set(0, 1.2, -0.8);
-  const carLight = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5), new THREE.MeshBasicMaterial({ color: 0x5c625c }));
-  carLight.rotation.x = Math.PI / 2;
-  carLight.position.set(0, 2.38, -0.8);
-  carLight.visible = false;
-
   const ind = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.31), indicatorMat);
   ind.position.set(0, 2.66, 0.11);
 
@@ -370,14 +364,61 @@ function buildElevator(root, mat, indicatorMat, k) {
   const btn = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), btnMat);
   btn.position.set(hw + 0.32, 1.2, 0.05);
 
-  g.add(pl, pr, lintel, left, right, car, carLight, ind, btnPanel, btn);
+  g.add(pl, pr, lintel, left, right, ind, btnPanel, btn);
   root.add(g);
   g.updateMatrixWorld(true);
   return {
-    k, group: g, left, right, carLight, btnMat, open: 0, target: 0,
+    k, group: g, left, right, btnMat, open: 0, target: 0,
     doorPos: polar(R_OUT - 0.2, DOOR_ANGLE, y + 1.2, new THREE.Vector3()),
     buttonPos: g.localToWorld(new THREE.Vector3(hw + 0.32, 1.2, 0.05)),
   };
+}
+
+/** 실제로 오르내리는 엘리베이터 칸 (밝은 실내) */
+export function buildCar(root, mat) {
+  const g = new THREE.Group();
+  faceCenter(g, R_OUT, DOOR_ANGLE, 0);
+  const inner = new THREE.MeshStandardMaterial({ map: mat.metal.map, color: 0xb9bcbf, roughness: 0.32, metalness: 0.55, side: THREE.BackSide, emissive: 0x2a2c2e });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 1.5), inner);
+  box.position.set(0, 1.2, -0.8);
+  box.receiveShadow = true;
+  // 바닥 (어두운 고무 매트)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(1.46, 1.46), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0.005, -0.8);
+  // 천장 조명 패널 (환하게)
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  lightMat.color.setScalar(2.4);
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), lightMat);
+  panel.rotation.x = Math.PI / 2;
+  panel.position.set(0, 2.39, -0.8);
+  // 손잡이 레일
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 1.3), mat.metal);
+  rail.position.set(0.72, 0.95, -0.8);
+  const rail2 = rail.clone();
+  rail2.position.x = -0.72;
+  // 내부 버튼 패널 (고장)
+  const cp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.2), mat.frame);
+  cp.position.set(0.735, 1.25, -0.3);
+  const btnGeo = new THREE.CircleGeometry(0.018, 10);
+  const btnMat = new THREE.MeshBasicMaterial({ color: 0x3a3a2a });
+  for (let i = 0; i < 6; i++) {
+    const b = new THREE.Mesh(btnGeo, btnMat);
+    b.position.set(0.719, 1.12 + Math.floor(i / 2) * 0.09, -0.34 + (i % 2) * 0.08);
+    b.rotation.y = -Math.PI / 2;
+    g.add(b);
+  }
+  // 칸 자체의 안쪽 문 (승강장 문과 함께 열림)
+  const doorGeo = new THREE.BoxGeometry(0.6, 2.28, 0.03);
+  const left = new THREE.Mesh(doorGeo, mat.metal);
+  const right = new THREE.Mesh(doorGeo, mat.metal);
+  left.position.set(-0.3, 1.14, -0.09);
+  right.position.set(0.3, 1.14, -0.09);
+  const light = new THREE.PointLight(0xf2f6ff, 0, 5, 1.4);
+  light.position.set(0, 2.1, -0.8);
+  g.add(box, floor, panel, rail, rail2, cp, left, right, light);
+  root.add(g);
+  return { group: g, left, right, light, lightMat, btnMat, panelLocal: new THREE.Vector3(0.72, 1.25, -0.3) };
 }
 
 /** 비상문 + 그 뒤의 복도와 방 (숨을 수 있는 공간) */

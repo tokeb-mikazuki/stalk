@@ -37,15 +37,13 @@ export class Hud {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   }
 
-  setFloor(text) {
-    if (text !== this.lastFloor) {
-      this.lastFloor = text;
-      this.floorNum.textContent = text;
-    }
+  setFloor() {
+    /* 층 표시 없음 */
   }
 
-  setGoal(left, total) {
-    const t = left <= 0 ? '목표: 옥상 문을 열고 탈출!' : `목표: ${total}F 옥상 탈출 · ${left}층 남음`;
+  /** 현재 층은 알려주지 않는다 (벽에 칠해진 층 번호로만 알 수 있음) */
+  setGoal(left) {
+    const t = left <= 0 ? '목표: 옥상 문을 열고 탈출' : '목표: 옥상 문으로 탈출';
     if (t !== this.lastGoal) {
       this.lastGoal = t;
       this.goalEl.textContent = t;

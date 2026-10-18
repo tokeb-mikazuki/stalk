@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import songsinUrl from '../assets/songsin.png';
 import {
   FLOOR_PHI, FLOORS, FLOOR_H, R_IN, R_MID, DIFFICULTY,
-  baseY, onLanding, landingCenter, polar, setFloors, pathDist, fireDoorPhi, R_OUT,
+  baseY, onLanding, landingCenter, polar, setFloors, pathDist, fireDoorPhi, R_OUT, toElevLocal,
 } from './config.js';
 import { buildWorld } from './world.js';
 import { Player } from './player.js';
@@ -15,6 +15,7 @@ import { Director } from './director.js';
 import { TouchControls, isTouchDevice } from './touch.js';
 import { Progress, ACHIEVEMENTS } from './achievements.js';
 import { TorchFX } from './fx.js';
+import { Elevator } from './elevator.js';
 
 const NOTES = [
   { k: 1, title: '관리일지 — 3월 2일', body: '계단 청소 중 엘리베이터가 혼자 움직였다.\n아무도 타지 않았는데 층수 표시기가 계속 바뀐다.\n\n표시기에 숫자가 보이면 그건 엘리베이터 안에 있다.\n"Err"가 뜨면… 계단 어딘가에 있다.' },
@@ -95,9 +96,10 @@ class Game {
     this.player = new Player(this.camera);
     this.fx = new TorchFX(this.scene, this.camera, this.player.torch);
     this.diff = DIFFICULTY.normal;
+    this.elevator = new Elevator(this);
+    this.trap = null;
 
     this.items = [];
-    this.closeTimers = [];
     this.hints = new Set();
     this.state = 'loading';
     this.input = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
@@ -469,6 +471,8 @@ class Game {
     this.audio.silence(false);
     this.clearItems();
     this.stalker.reset(DIFFICULTY.normal);
+    this.elevator.reset(0);
+    this.trap = null;
     this.director.reset();
     this.player.reset();
     this.player.torch.intensity = 0;
@@ -493,6 +497,9 @@ class Game {
     this.player.reset();
     this.player.viewModel.visible = true;
     this.stalker.reset(this.diff);
+    this.elevator.reset(Math.round(this.stalker.elevFloor));
+    this.elevator.occupant = 'stalker';
+    this.trap = null;
     this.director.reset();
     this.phantom.visible = false;
     this.time = 0;
@@ -500,7 +507,6 @@ class Game {
     this.hides = 0;
     this.glitch = 0;
     this.fear = 0;
-    this.closeTimers = [];
     this.hints = new Set(this.progress.data.hints || []); // 이미 본 안내는 다시 띄우지 않음
     this.resetDoors();
     this.rollLocks();
@@ -525,7 +531,7 @@ class Game {
         }
       } catch { /* 전체 화면 미지원 */ }
     }
-    this.director.after(1.5, () => this.hint('intro-goal', `목표: ${FLOORS}F 옥상 문으로 탈출`, 3.5));
+    this.director.after(1.5, () => this.hint('intro-goal', `목표: 맨 위층(${FLOORS}F) 옥상 문으로 탈출 — 벽의 층 번호를 확인하라`, 4));
     this.director.after(5.5, () => this.hint('intro-elevator', '엘리베이터 표시기 — 숫자: 송신이 엘리베이터 안 · Err: 계단 위', 4.5));
     this.director.after(10.5, () => this.hint('intro-door', '초록 비상구 표시 문 = 숨을 곳 · [E] 열기/닫기', 4));
   }
@@ -534,7 +540,7 @@ class Game {
     if (this.state !== 'playing') return;
     this.closeCctv();
     this.state = 'paused';
-    document.getElementById('pause-info').textContent = `${this.diff.label} · ${this.player.floor + 1}F / ${FLOORS}F · ${formatTime(this.time)}`;
+    document.getElementById('pause-info').textContent = `${this.diff.label} · ${formatTime(this.time)}`;
     this.hud.screen('pause');
     this.touch.show(false);
     // 30초 넘게 멈춰 있으면 화면이 깨진다
@@ -678,6 +684,12 @@ class Game {
     const fd = this.world.fireDoors[k];
     if (fd) consider(fd.pos, 2.2, { kind: 'firedoor', door: fd });
     if (k === FLOORS - 1) consider(this.world.roof.pos, 2.4, { kind: 'roof' });
+    const el = this.world.elevators[k];
+    if (el && !this.player.inCar && !this.player.inRoom) consider(el.buttonPos, 1.9, { kind: 'button', k });
+    if (this.player.inCar) {
+      const cp = this.world.car.group.localToWorld(this.world.car.panelLocal.clone());
+      consider(cp, 1.6, { kind: 'carpanel' });
+    }
     if (this.player.inRoom && fd) consider(fd.monitorPos, 1.9, { kind: 'cctv', door: fd });
     return best;
   }
@@ -687,6 +699,8 @@ class Game {
     if (t.kind === 'item') return { battery: '배터리 줍기', note: '쪽지 읽기' }[t.it.type];
     if (t.kind === 'firedoor') return t.door.locked ? '비상문 (잠김)' : t.door.target > 0 ? '비상문 닫기' : '비상문 열기';
     if (t.kind === 'roof') return '옥상 문 열고 탈출하기';
+    if (t.kind === 'button') return '엘리베이터 호출';
+    if (t.kind === 'carpanel') return '층 버튼 누르기';
     if (t.kind === 'cctv') return t.door.open > 0.3 ? 'CCTV 보기 (문이 열려 있다!)' : 'CCTV 보기 — 문 앞 확인';
     return '';
   }
@@ -737,6 +751,20 @@ class Game {
       this.win();
     } else if (t.kind === 'cctv') {
       this.openCctv(t.door);
+    } else if (t.kind === 'button') {
+      const el = this.elevator;
+      a.click(0.5);
+      if (el.doorK === t.k) el.hold(4);
+      else {
+        el.call(t.k, 'player');
+        this.world.elevators[t.k].btnMat.color.setHex(0xff3322);
+        this.hud.msg('엘리베이터를 불렀다', 1.6);
+      }
+    } else if (t.kind === 'carpanel') {
+      a.click(0.6);
+      a.rattle(this.camera.position);
+      this.world.car.btnMat.color.setHex(Math.random() < 0.5 ? 0x5a1a1a : 0x3a3a2a);
+      this.hud.msg('버튼이 고장나 있다', 2);
     }
   }
 
@@ -828,10 +856,6 @@ class Game {
     this.glitch = Math.max(this.glitch, v);
   }
 
-  closeElevator(k, delay) {
-    this.closeTimers.push({ k, t: delay });
-  }
-
   /** 송신이 비상문을 연다 (slam: 부수듯 열어젖힘) */
   forceDoor(k, slam = false) {
     const d = this.world.fireDoors[k];
@@ -849,13 +873,54 @@ class Game {
     }
   }
 
-  onElevatorArrive(k, hunting) {
+  /** 엘리베이터가 k층에 도착해 문이 열림 */
+  onElevatorArrive(k, el) {
     const e = this.world.elevators[k];
-    this.audio.ding(e.doorPos, hunting);
+    this.audio.ding(e.doorPos, el.occupant === 'stalker' && this.stalker.hunting);
+    this.stalker.onCarArrive(k, this);
   }
 
-  onDoorOpen(k) {
-    this.audio.doorSlide(this.world.elevators[k].doorPos);
+  /** 문간에 누가 서 있으면 엘리베이터 문이 닫히지 않는다 */
+  blockElevatorClose(k) {
+    const p = this.player;
+    if (p.carK === k) {
+      const c = toElevLocal(p.x, p.z);
+      if (c.lz > -0.3) return true;
+    }
+    return false;
+  }
+
+  /** 함정: 엘리베이터에 탄 채 문이 닫혔다 */
+  startTrap() {
+    const p = this.player, el = this.elevator;
+    const k = p.carK;
+    const offs = [2, 3, 4, -2, -3].map((o) => k + o).filter((t) => t >= 0 && t < FLOORS);
+    const T = offs[Math.floor(Math.random() * offs.length)];
+    this.trap = { T, t: 0 };
+    this.run.trapped = true;
+    el.calls = [];
+    el.dest = null;
+    el.target = null;
+    el.occupant = 'player';
+    el.speedMul = 1;
+    el.send(T);
+    this.stalker.setTrap(T);
+  }
+
+  /** 엘리베이터 칸 위치·문·조명 */
+  updateCar(dt) {
+    const el = this.elevator, car = this.world.car, p = this.player;
+    car.group.position.y = el.floor * FLOOR_H;
+    const open = el.doorK >= 0 ? this.world.elevators[el.doorK].open : el.closingK >= 0 ? this.world.elevators[el.closingK]?.open ?? 0 : 0;
+    const o = open * open * (3 - 2 * open);
+    car.left.position.x = -0.3 - o * 0.56;
+    car.right.position.x = 0.3 + o * 0.56;
+    const lit = open > 0.02 || p.carK >= 0;
+    // 함정 이동 중에는 조명이 불안하게 깜빡인다
+    let lv = lit ? 1 : 0;
+    if (this.trap && el.moving && Math.random() < 0.08) lv = 0.15;
+    car.light.intensity = 6 * lv;
+    car.lightMat.color.setScalar(2.4 * lv + 0.05);
   }
 
   onDoorRattle(k) {
@@ -889,7 +954,6 @@ class Game {
     const o = e.open * e.open * (3 - 2 * e.open);
     e.left.position.x = -0.3 - o * 0.56;
     e.right.position.x = 0.3 + o * 0.56;
-    e.carLight.visible = e.open > 0.02;
   }
 
   // ------------------------------------------------------------------ 종료
@@ -1027,7 +1091,7 @@ class Game {
     const reading = this.hud.noteOpen;
     this.noteT = reading ? (this.noteT || 0) + dt : 0;
     if (this.noteT > 30) this.breakPause();
-    const ev = p.update(dt, reading ? {} : this.input, this.diff, this.world.fireDoors);
+    const ev = p.update(dt, reading ? {} : this.input, this.diff, this.world.fireDoors, this.elevator);
     // 송신이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다
     if (this.doorBlocked) p.floorTime = Math.max(0, p.floorTime - dt);
     if (p.torchOn) this.run.torchTime += dt;
@@ -1051,6 +1115,19 @@ class Game {
     if (p.inRoom) this.hint('room', '[E] 문 닫기 → 송신이 못 들어옴 · 오래 숨으면 들킨다 · 모니터 = CCTV', 4.5);
 
 
+    this.elevator.update(dt);
+    if (p.carK >= 0 && !this.trap && this.elevator.doorK < 0 && this.world.elevators[p.carK].open < 0.25) this.startTrap();
+    if (this.trap) {
+      p.rideCar(this.elevator.floor, FLOOR_H);
+      if (this.elevator.moving) this.player.shake = Math.max(this.player.shake, 0.12);
+      // 문이 열리면 송신이 바로 앞에 서 있다
+      if (this.elevator.doorK === this.trap.T && this.world.elevators[this.trap.T].open > 0.35) {
+        this.progress.unlock('trap');
+        this.die();
+        return;
+      }
+    }
+    this.updateCar(dt);
     s.update(dt, p, this);
     this.doorBlocked = p.inRoom && !s.inElevator && s.roomK < 0 && s.floor === p.roomK
       && pathDist(s.phi, s.r, fireDoorPhi(p.roomK), R_OUT - 0.45) < 7;
@@ -1067,7 +1144,7 @@ class Game {
 
     // ---- 근접도 / 공포 ----
     let d;
-    if (s.inElevator) d = Math.abs(s.elevFloor * FLOOR_H - p.footY) * 1.3 + 6;
+    if (s.inElevator) d = Math.abs(this.elevator.floor * FLOOR_H - p.footY) * 1.3 + 6;
     else d = s.distTo(p);
     if (s.visible && d < 26 && !s.chasing) this.hint('see', '송신 — 들키기 전에 피하라', 3);
     const hidden = p.inRoom && this.world.fireDoors[p.roomK].open < 0.3;
@@ -1112,7 +1189,7 @@ class Game {
 
     // ---- HUD ----
     const fl = p.floor;
-    this.hud.setFloor(p.inRoom ? `${fl + 1}F 비상실` : onLanding(p.phi) || fl >= FLOORS - 1 ? `${fl + 1}F` : `${fl + 1}F ↗ ${fl + 2}F`);
+    this.hud.setFloor(p.inCar ? `${fl + 1}F 엘리베이터` : p.inRoom ? `${fl + 1}F 비상실` : onLanding(p.phi) || fl >= FLOORS - 1 ? `${fl + 1}F` : `${fl + 1}F ↗ ${fl + 2}F`);
     this.hud.setGoal(FLOORS - 1 - fl, FLOORS);
     this.hud.setStamina(p.stamina, p.exhausted);
     this.hud.setBattery(p.battery);
@@ -1126,26 +1203,13 @@ class Game {
       chasing: s.chasing,
       muffled: hidden,
       humPos: s.humPos,
-      humOn: s.inElevator && s.elevDelay <= 0,
+      humOn: this.elevator.moving,
       proximity: s.inElevator ? prox * 0.5 : prox,
       fear: this.fear,
       breath: Math.max(0, 1 - p.stamina / 45) * (p.exhausted ? 1 : 0.7),
       floorRatio: fl / (FLOORS - 1),
     });
 
-    // 엘리베이터 문 닫힘 예약
-    for (let i = this.closeTimers.length - 1; i >= 0; i--) {
-      const c = this.closeTimers[i];
-      c.t -= dt;
-      if (c.t <= 0) {
-        this.closeTimers.splice(i, 1);
-        const e = this.world.elevators[c.k];
-        if (!(s.state === 'toElevator' && s.doorK === c.k) && !(s.state === 'arriving' && s.doorK === c.k)) {
-          if (e.target !== 0) this.audio.doorSlide(e.doorPos);
-          e.target = 0;
-        }
-      }
-    }
   }
 
   updateDying(dt) {
@@ -1356,6 +1420,8 @@ const LOADING_TIPS = [
   '체력이 바닥난 채로 달리면 넘어진다.',
   '위로 올라갈수록 송신은 더 예민해진다.',
   '일시정지 뒤에 오래 숨어 있지 마라.',
+  '엘리베이터를 다른 층으로 불러 두면, 송신은 한참을 기다려야 한다.',
+  '송신도 엘리베이터 버튼을 눌러야 탈 수 있다.',
 ];
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

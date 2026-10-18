@@ -127,6 +127,32 @@ export function inRoomArea(lx, lz, pad = 0.28) {
 }
 
 // 난이도: 캐주얼 / 노말 / 하드 / 악몽(30층, 하드 클리어 시 해금)
+// ---------- 엘리베이터 문 로컬 좌표 (원점 = 엘리베이터 문 중앙, +z = 계단 안쪽) ----------
+const EC = Math.cos(DOOR_ANGLE), ES = Math.sin(DOOR_ANGLE);
+const EX = R_OUT * EC, EZ = R_OUT * ES;
+export const CAR_HALF = 0.75;   // 엘리베이터 내부 반폭
+export const CAR_DEPTH = 1.55;  // 엘리베이터 내부 깊이
+
+export function toElevLocal(x, z, out = {}) {
+  const dx = x - EX, dz = z - EZ;
+  out.lx = dx * -ES + dz * EC;
+  out.lz = dx * -EC + dz * -ES;
+  return out;
+}
+
+export function fromElevLocal(lx, lz, out = {}) {
+  out.x = EX + lx * -ES + lz * -EC;
+  out.z = EZ + lx * EC + lz * -ES;
+  return out;
+}
+
+/** 엘리베이터 문간 + 내부 (걸을 수 있는 곳) */
+export function inCarArea(lx, lz, pad = 0.28) {
+  const gap = Math.abs(lx) <= DOOR_HALF_W - pad && lz >= -0.2 && lz <= 0.9;
+  const car = Math.abs(lx) <= CAR_HALF - pad && lz >= -CAR_DEPTH + pad && lz <= -0.05;
+  return gap || car;
+}
+
 export const DIFFICULTY_ORDER = ['casual', 'normal', 'hard', 'nightmare'];
 export const DIFFICULTY = {
   casual: {

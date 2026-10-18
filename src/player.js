@@ -4,6 +4,7 @@ import { torchCookieTexture } from './textures.js';
 import {
   TAU, FLOOR_PHI, LANDING, R_MID, PHI_MIN, PHI_MAX, PLAYER_R_MIN, PLAYER_R_MAX, EYE, EYE_CROUCH,
   floorIndex, stepTopY, onLanding, toRoomLocal, fromRoomLocal, inRoomArea,
+  toElevLocal, fromElevLocal, inCarArea,
 } from './config.js';
 
 const WALK = 2.9, SPRINT = 5.4, CROUCH = 1.4;
@@ -108,6 +109,12 @@ export class Player {
     this.shake = 0;
     this.frozen = false;
     this.roomK = -1; // 숨을 방 안에 있으면 그 층 번호
+    this.carK = -1;  // 엘리베이터 안에 있으면 그 층 번호
+    this.carY = null; // 엘리베이터가 움직이는 동안 바닥 높이
+  }
+
+  get inCar() {
+    return this.carK >= 0;
   }
 
   get inRoom() {
@@ -155,7 +162,7 @@ export class Player {
    * input: {f,b,l,r,sprint,crouch}
    * 반환: { footstep: 볼륨|0, trip: bool }
    */
-  update(dt, input, diff, doors = []) {
+  update(dt, input, diff, doors = [], elev = null) {
     const ev = { footstep: 0, trip: false };
     const tripping = this.tripT > 0;
     if (tripping) this.tripT = Math.max(0, this.tripT - dt);
@@ -191,7 +198,7 @@ export class Player {
 
     // ----- 나선 계단 위로 이동 (phi, r 로 충돌 처리) -----
     const ox = this.x, oz = this.z;
-    this.moveTo(this.x + this.vx * dt, this.z + this.vz * dt, doors);
+    this.moveTo(this.x + this.vx * dt, this.z + this.vz * dt, doors, elev);
     this.speed = Math.hypot(this.x - ox, this.z - oz) / Math.max(dt, 1e-4);
 
     // ----- 스태미나 -----
@@ -259,7 +266,27 @@ export class Player {
   }
 
   /** 계단(원환) + 비상문 너머 방을 오가는 충돌 처리 */
-  moveTo(nx, nz, doors) {
+  moveTo(nx, nz, doors, elev = null) {
+    if (this.carK >= 0) {
+      // 엘리베이터 안: 문이 열려 있을 때만 문간을 지나 나갈 수 있다
+      const passable = elev && elev.isOpenAt(this.carK);
+      const ok = (lx, lz) => inCarArea(lx, lz) && (passable || lz < -0.25);
+      const c = toElevLocal(nx, nz);
+      if (c.lz > 0.35 && passable && Math.hypot(nx, nz) <= PLAYER_R_MAX + 0.02) {
+        this.carK = -1;
+        this.carY = null;
+        this.moveTo(nx, nz, doors, elev);
+        return;
+      }
+      const o = toElevLocal(this.x, this.z);
+      let lx = o.lx, lz = o.lz;
+      if (ok(c.lx, c.lz)) { lx = c.lx; lz = c.lz; }
+      else if (ok(c.lx, o.lz)) lx = c.lx;
+      else if (ok(o.lx, c.lz)) lz = c.lz;
+      const w = fromElevLocal(lx, lz);
+      this.setCarPos(w.x, w.z);
+      return;
+    }
     if (this.roomK >= 0) {
       const d = doors[this.roomK];
       const passable = d && d.open > 0.7;
@@ -268,7 +295,7 @@ export class Player {
       // 문을 지나 계단참으로 나감
       if (c.lz > 0.35 && passable && Math.hypot(nx, nz) <= PLAYER_R_MAX + 0.02) {
         this.roomK = -1;
-        this.moveTo(nx, nz, doors);
+        this.moveTo(nx, nz, doors, elev);
         return;
       }
       const o = toRoomLocal(this.x, this.z);
@@ -284,6 +311,20 @@ export class Player {
     const dphi = wrapPi(Math.atan2(nz, nx) - this.phi);
     let phi = this.phi + dphi;
     let r = Math.hypot(nx, nz);
+    // 열린 엘리베이터로 들어감
+    const kE = floorIndex(phi);
+    if (elev && elev.isOpenAt(kE) && onLanding(phi) && r > PLAYER_R_MAX) {
+      const c = toElevLocal(nx, nz);
+      if (Math.abs(c.lx) < 0.65) {
+        c.lx = Math.max(-0.3, Math.min(0.3, c.lx));
+        if (inCarArea(c.lx, c.lz)) {
+          this.carK = kE;
+          const w = fromElevLocal(c.lx, c.lz);
+          this.setCarPos(w.x, w.z);
+          return;
+        }
+      }
+    }
     // 열린 비상문으로 들어감 (문 쪽으로 살짝 빨아들여 들어가기 쉽게)
     const k = floorIndex(phi);
     const door = doors[k];
@@ -317,6 +358,25 @@ export class Player {
     this.r = Math.hypot(x, z);
   }
 
+  setCarPos(x, z) {
+    const k = this.carK;
+    const phi = this.phi + wrapPi(Math.atan2(z, x) - this.phi);
+    this.phi = Math.max(k * FLOOR_PHI + 0.01, Math.min(k * FLOOR_PHI + LANDING - 0.01, phi));
+    this.x = x;
+    this.z = z;
+    this.r = Math.hypot(x, z);
+  }
+
+  /** 엘리베이터가 움직일 때: 층 번호와 바닥 높이를 따라간다 */
+  rideCar(floorFloat, floorH) {
+    const k = Math.round(floorFloat);
+    if (k !== this.carK) {
+      this.phi += (k - this.carK) * FLOOR_PHI;
+      this.carK = k;
+    }
+    this.carY = floorFloat * floorH;
+  }
+
   /** 문이 닫힐 때 문짝 자리에 서 있으면 방 안쪽으로 밀어냄 */
   pushOutOfDoorway() {
     if (this.roomK < 0) return;
@@ -329,7 +389,7 @@ export class Player {
 
   updateCamera(dt) {
     // 발 높이: 계단을 오를 때는 빠르게, 내려갈 때는 떨어지듯
-    const target = stepTopY(this.phi);
+    const target = this.carK >= 0 && this.carY !== null ? this.carY : stepTopY(this.phi);
     if (target > this.footY) this.footY += (target - this.footY) * Math.min(1, dt * 16);
     else this.footY = Math.max(target, this.footY - dt * 5);
 

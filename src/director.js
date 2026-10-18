@@ -146,11 +146,9 @@ export class Director {
       case 'ding': {
         let k = p.floor + (Math.random() < 0.5 ? 1 : -1) * (1 + Math.floor(Math.random() * 3));
         k = Math.max(0, Math.min(FLOORS - 1, k));
-        if (k === s.doorK && !s.inElevator) return;
-        const e = g.world.elevators[k];
-        e.target = 1;
-        a.ding(e.doorPos);
-        g.closeElevator(k, 3.5);
+        const el = g.elevator;
+        if (el.occupant || el.moving || el.doorK >= 0 || el.calls.length) return this.fire('whisper');
+        el.call(k, 'ghost'); // 아무도 부르지 않았는데 엘리베이터가 움직인다
         break;
       }
       case 'footsteps': {

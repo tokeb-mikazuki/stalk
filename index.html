@@ -189,7 +189,7 @@
     /* ---------- HUD ---------- */
     #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .6s; }
     #hud.on { opacity: 1; }
-    #floor { position: absolute; top: 24px; left: 28px; padding-left: 14px; border-left: 2px solid var(--blood); }
+    #floor { position: absolute; top: 24px; left: 28px; padding-left: 12px; border-left: 2px solid var(--blood); }
     #floor .lbl { font-size: 10px; letter-spacing: .5em; color: #77736a; }
     #floor .num { font-family: var(--serif); font-size: 42px; font-weight: 900; letter-spacing: 2px; line-height: 1.1; text-shadow: 0 0 12px rgba(0,0,0,.9); }
     #floor .goal { font-size: 12px; color: #a29e93; letter-spacing: .08em; }
@@ -323,7 +323,7 @@
   </div>
 
   <div id="hud">
-    <div id="floor"><div class="lbl">FLOOR</div><div class="num">1F</div><div class="goal">목표: 20F 옥상</div></div>
+    <div id="floor"><div class="goal">목표: 옥상 문으로 탈출</div></div>
     <div id="meters">
       <div class="meter" id="stamina"><div class="lbl"><span>STAMINA · 체력</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
       <div class="meter" id="battery"><div class="lbl"><span>LIGHT · 손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
@@ -430,6 +430,8 @@
         <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.</li>
         <li>비상실 안쪽 벽의 <b>CCTV 모니터</b>로 문 앞을 확인할 수 있다.</li>
         <li>같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.</li>
+        <li>엘리베이터 <b>호출 버튼</b>으로 엘리베이터를 부를 수 있다. 송신도 버튼을 눌러야 엘리베이터를 탈 수 있다.</li>
+        <li>지금 몇 층인지는 벽에 칠해진 층 번호로만 알 수 있다.</li>
         <li>송신은 걷는 것보다 빠르고 달리는 것보다 느리다. 달리면 발소리가, 손전등은 빛이 눈에 띈다.</li>
         <li>체력이 바닥난 채로 달리면 넘어진다. 오른쪽 아래 수신기가 지직거릴수록 송신이 가깝다.</li>
         <li>일시정지 뒤에 너무 오래 숨지 마라.</li>

@@ -1,10 +1,11 @@
 // 송신 — 엘리베이터로 아무 층에나 내려, 계단을 따라 플레이어에게 다가오는 존재
 //
 // 송신은 평면(앞: 얼굴 / 뒤: 머리카락 실루엣)이며 항상 "자기가 걸어가는 방향"을 바라본다.
-// 상태: elevator → arriving → approach | wander → chase → (lost | search | vanish) → toElevator → elevator ...
+// 상태: elevator → arriving → approach | wander → chase → (lost | search | vanish) → toElevator → waitCar → elevator ...
+// 엘리베이터는 플레이어와 함께 쓰는 실제 한 대(elevator.js)라서, 버튼을 누르고 올 때까지 기다려야 탈 수 있다.
 import * as THREE from 'three';
 import {
-  FLOORS, FLOOR_H, FLOOR_PHI, R_MID, R_OUT, PHI_MIN, PHI_MAX, CORR_L,
+  FLOORS, FLOOR_H, FLOOR_PHI, R_MID, R_OUT, DOOR_ANGLE, PHI_MIN, PHI_MAX, CORR_L,
   baseY, floorIndex, landingCenter, fireDoorPhi, pathDist, polar,
   toRoomLocal, fromRoomLocal,
 } from './config.js';
@@ -57,7 +58,8 @@ export class Stalker {
     this.footY = 0;
     this.yaw = 0;
     this.elevFloor = 7 + Math.floor(Math.random() * 6);
-    this.elevTarget = this.elevFloor;
+    this.elevTarget = null;
+    this.rideSent = false;
     this.elevDelay = (diff ? diff.graceTime : 20) + Math.random() * 6; // 시작 유예 시간
     this.hunting = false;
     this.huntOffset = 0;
@@ -238,12 +240,52 @@ export class Stalker {
     return t;
   }
 
+  /** 엘리베이터에 타서 target 층으로 (target 이 null 이면 출발할 때 정함) */
   startElevatorRide(target, delay, game) {
     this.setState('elevator');
     this.elevTarget = target;
     this.elevDelay = delay;
+    this.rideSent = false;
     this.visible = false;
+    const el = game.elevator;
+    el.occupant = 'stalker';
     if (Math.random() < this.diff.indicatorGlitch) this.glitchT = 5; // 원작: 엘리베이터 출발 시 30% 확률 글리치
+  }
+
+  /** 계단 위에서 사라졌다가 엘리베이터 안에서 다시 나타남 (초자연적 이동) */
+  teleportIntoCar(floor, game) {
+    const el = game.elevator;
+    if (el.occupant === 'player') return false;
+    el.closeDoors();
+    el.floor = Math.max(0, Math.min(FLOORS - 1, floor));
+    el.target = null;
+    el.dest = null;
+    this.elevFloor = el.floor;
+    return true;
+  }
+
+  /** 엘리베이터가 어느 층에 도착해 문이 열렸을 때 (Elevator 가 알려줌) */
+  onCarArrive(k, game) {
+    if (this.state !== 'elevator' || !this.rideSent || game.elevator.occupant !== 'stalker') return;
+    this.setState('arriving');
+    this.doorK = k;
+    this.phi = k * FLOOR_PHI + DOOR_ANGLE;
+    this.r = R_OUT + 0.75;
+    this.roomK = -1;
+    this.yaw = Math.atan2(-Math.cos(this.phi), -Math.sin(this.phi)); // 계단 쪽을 보며 나옴
+  }
+
+  /** 함정: 플레이어가 탄 엘리베이터가 도착할 층의 문 앞에서 기다린다 */
+  setTrap(k) {
+    this.setState('trapWait');
+    this.hunting = false;
+    this.huntQueued = false;
+    this.roomK = -1;
+    this.phi = k * FLOOR_PHI + DOOR_ANGLE;
+    this.r = R_OUT - 0.32;
+    this.yaw = Math.atan2(Math.cos(this.phi), Math.sin(this.phi)); // 엘리베이터 문을 바라봄
+    this.visible = true;
+    this.doorK = k;
   }
 
   /** 외부 사건(층 체류, 마지막 추격)으로 플레이어를 사냥하러 옴. offset: 플레이어 층 기준 도착 층 */
@@ -262,6 +304,7 @@ export class Stalker {
       return 'chase';
     }
     this.huntOffset = offset;
+    if (this.state === 'trapWait') return 'already';
     if (this.state === 'elevator') {
       this.hunting = true;
       this.elevDelay = Math.min(this.elevDelay, 1.2);
@@ -327,6 +370,7 @@ export class Stalker {
   goElevator(game) {
     this.doorK = Math.max(0, Math.min(FLOORS - 1, Math.round((this.phi - landingCenter(0)) / FLOOR_PHI)));
     this.setState('toElevator');
+    this.called = false;
   }
 
   // ------------------------------------------------------------------ 갱신
@@ -344,41 +388,48 @@ export class Stalker {
 
     switch (this.state) {
       case 'elevator': {
+        // 엘리베이터 안 (보이지 않음). 출발 대기 → 목적지로 보냄 → 도착하면 onCarArrive
         this.visible = false;
-        if (this.hunting) this.elevTarget = Math.max(0, Math.min(FLOORS - 1, player.floor + this.huntOffset));
+        const el = game.elevator;
+        this.elevFloor = el.floor;
+        if (this.hunting) {
+          this.elevTarget = Math.max(0, Math.min(FLOORS - 1, player.floor + this.huntOffset));
+          if (this.rideSent) el.send(this.elevTarget);
+        }
+        el.speedMul = this.hunting ? 2.4 : 1;
         if (this.elevDelay > 0) {
           this.elevDelay -= dt;
           break;
         }
-        const spd = (this.hunting ? 2.4 : 1) / diff.elevatorSecPerFloor;
-        const d = this.elevTarget - this.elevFloor;
-        if (Math.abs(d) <= spd * dt) {
-          this.elevFloor = this.elevTarget;
-          this.setState('arriving');
-          this.doorK = this.elevTarget;
-          this.phi = landingCenter(this.doorK);
-          this.r = R_OUT + 0.75;
-          this.roomK = -1;
-          this.yaw = Math.atan2(-Math.cos(this.phi), -Math.sin(this.phi)); // 계단 쪽을 보며 나옴
-          elevs[this.doorK].target = 1;
-          game.onElevatorArrive?.(this.doorK, this.hunting);
-        } else {
-          this.elevFloor += Math.sign(d) * spd * dt;
+        if (!this.rideSent) {
+          if (this.elevTarget === null || this.elevTarget === undefined) this.elevTarget = this.pickElevatorTarget(player.floor);
+          this.rideSent = true;
+          el.send(this.elevTarget);
         }
         break;
       }
 
       case 'arriving': {
+        const el = game.elevator;
+        el.hold(1.2);
         if (this.stateTime > 1.1) {
           this.visible = true;
           this.moveToward(this.phi, R_MID, diff.approachSpeed, dt);
           if (this.r < R_OUT - 0.7) {
-            game.closeElevator(this.doorK, 1.5);
+            el.occupant = null;
+            el.speedMul = 1;
             if (this.hunting || this.detect(player)) this.beginChase();
             else if (Math.random() < 0.8) this.setState('approach');
             else this.pickWander(player);
           }
         }
+        break;
+      }
+
+      case 'trapWait': {
+        // 엘리베이터 문 앞에서 미동도 없이 기다린다
+        this.visible = true;
+        face = this.yaw;
         break;
       }
 
@@ -402,26 +453,52 @@ export class Stalker {
       }
 
       case 'toElevator': {
+        // 엘리베이터 앞으로 걸어가 버튼을 누른다
         this.visible = true;
         if (this.roomK >= 0) {
           this.exitRoomStep(diff.roamSpeed * 1.5, dt, game);
           break;
         }
-        const tPhi = landingCenter(this.doorK);
-        this.moveToward(tPhi, R_OUT + 0.8, diff.roamSpeed * 1.2, dt);
-        if (this.r > R_OUT - 1.3 && elevs[this.doorK].target === 0) {
-          elevs[this.doorK].target = 1;
-          game.onDoorOpen?.(this.doorK);
-        }
-        if (this.r > R_OUT + 0.6) {
-          this.visible = false;
-          game.closeElevator(this.doorK, 0.4);
-          this.elevFloor = this.doorK;
-          const [d0, d1] = diff.rideDelay;
-          this.startElevatorRide(this.pickElevatorTarget(player.floor), d0 + Math.random() * (d1 - d0), game);
-          break;
+        const el = game.elevator;
+        const tPhi = this.doorK * FLOOR_PHI + DOOR_ANGLE;
+        const rem = this.moveToward(tPhi, R_OUT - 0.55, diff.roamSpeed * 1.2, dt);
+        if (rem < 0.2) {
+          el.call(this.doorK, 'stalker');
+          this.setState('waitCar');
         }
         if (this.detect(player)) this.beginChase();
+        break;
+      }
+
+      case 'waitCar': {
+        // 엘리베이터를 기다린다. 플레이어가 엘리베이터를 다른 층에 붙잡아 두면 결국 포기하고 계단으로 간다
+        this.visible = true;
+        const el = game.elevator;
+        const k = this.doorK;
+        const tPhi = k * FLOOR_PHI + DOOR_ANGLE;
+        if (el.isOpenAt(k) && el.occupant === null) {
+          el.hold(1.5);
+          this.moveToward(tPhi, R_OUT + 0.8, diff.roamSpeed * 1.2, dt);
+          if (this.r > R_OUT + 0.6) {
+            this.visible = false;
+            this.elevFloor = k;
+            const [d0, d1] = diff.rideDelay;
+            this.startElevatorRide(null, d0 + Math.random() * (d1 - d0), game);
+            el.hold(0.4);
+            el.doorT = Math.min(el.doorT, 0.4);
+            break;
+          }
+        } else {
+          this.moveToward(tPhi, R_OUT - 0.55, 0.5, dt);
+          face = Math.atan2(Math.cos(tPhi), Math.sin(tPhi)); // 문을 바라보며 기다림
+          el.call(k, 'stalker');
+          if (this.stateTime > 22) {
+            // 기다리다 지쳐 계단으로
+            this.setState('approach');
+            break;
+          }
+        }
+        if (this.r < R_OUT - 0.2 && this.detect(player)) this.beginChase();
         break;
       }
 
@@ -500,17 +577,17 @@ export class Stalker {
           this.roomK = -1;
           this.burst = false;
           const here = Math.max(0, Math.min(FLOORS - 1, this.floor));
-          this.elevFloor = here;
           if (this.huntQueued) {
             this.huntQueued = false;
             this.hunting = true;
-            this.startElevatorRide(player.floor + this.huntOffset, 1.5, game);
+            if (this.teleportIntoCar(here, game)) this.startElevatorRide(player.floor + this.huntOffset, 1.5, game);
+            else this.setState('approach');
           } else {
             // 멀리 떨어진 층에서 다시 시작
             let far = player.floor + (Math.random() < 0.5 ? -1 : 1) * (5 + Math.floor(Math.random() * 3));
             if (far < 0 || far >= FLOORS) far = player.floor < FLOORS / 2 ? FLOORS - 1 : 0;
-            this.elevFloor = far;
-            this.startElevatorRide(this.pickElevatorTarget(player.floor), 6 + Math.random() * 6, game);
+            if (this.teleportIntoCar(far, game)) this.startElevatorRide(null, 6 + Math.random() * 6, game);
+            else this.setState('approach');
           }
         }
         break;
@@ -550,7 +627,8 @@ export class Stalker {
     const bob = Math.abs(Math.sin(this.t * (this.chasing ? 9 : 4.2))) * (this.chasing ? 0.08 : 0.04);
     this.pos.set(w.x, this.footY + HEIGHT * 0.5 + 0.12 + bob, w.z);
     // 엘리베이터 승강로 위치 (모터 소리용)
-    polar(R_OUT + 0.9, landingCenter(0), this.elevFloor * FLOOR_H + 1.2, this.humPos);
+    const carFloor = this.game ? this.game.elevator.floor : this.elevFloor;
+    polar(R_OUT + 0.9, DOOR_ANGLE, carFloor * FLOOR_H + 1.2, this.humPos);
 
     const g = this.group;
     g.visible = this.visible;
@@ -576,13 +654,12 @@ export class Stalker {
 
   /** 엘리베이터 표시기에 보여줄 내용 (원작: 엘리베이터면 층수, 계단이면 Err) */
   indicator() {
-    if (this.state === 'elevator') {
-      const moving = this.elevDelay <= 0 && Math.abs(this.elevTarget - this.elevFloor) > 0.01;
-      const dir = moving ? Math.sign(this.elevTarget - this.elevFloor) : 0;
-      const shown = dir > 0 ? Math.floor(this.elevFloor + 1e-6) : Math.ceil(this.elevFloor - 1e-6);
+    const el = this.game && this.game.elevator;
+    if (el && el.occupant === 'stalker') {
+      const dir = el.moving ? Math.sign(el.target - el.floor) : 0;
+      const shown = dir > 0 ? Math.floor(el.floor + 1e-6) : Math.ceil(el.floor - 1e-6);
       return { text: `${shown + 1}`, dir, err: false };
     }
-    if (this.state === 'arriving') return { text: `${this.doorK + 1}`, dir: 0, err: false };
     return { text: '', dir: 0, err: true };
   }
 }
