@@ -135,6 +135,7 @@ export function inRoomArea(lx, lz, pad = 0.28) {
 //   checkRooms— 놓친 층의 비상실 문 앞을 확인하는지
 //   patience  — 엘리베이터를 기다리는 한계(s)
 //   lightSense— 손전등 빛을 위아래 층에서 알아채는 범위(층)
+//   calm      — 숨은 플레이어를 찾다 포기한 뒤 관심을 잃는 시간(s). 그동안은 그 층에서 4층 이상 떨어진 곳으로 간다
 // ---------- 엘리베이터 문 로컬 좌표 (원점 = 엘리베이터 문 중앙, +z = 계단 안쪽) ----------
 const EC = Math.cos(DOOR_ANGLE), ES = Math.sin(DOOR_ANGLE);
 const EX = R_OUT * EC, EZ = R_OUT * ES;
@@ -165,7 +166,7 @@ export const DIFFICULTY_ORDER = ['casual', 'normal', 'hard', 'nightmare'];
 export const DIFFICULTY = {
   casual: {
     label: '캐주얼',
-    ai: { hear: 18, floorErr: 2.2, memory: 14, predict: 0, checkRooms: false, patience: 26, lightSense: 0 },
+    ai: { hear: 18, floorErr: 2.2, memory: 14, predict: 0, checkRooms: false, patience: 26, lightSense: 0, calm: 34 },
     floors: 20,
     chaseSpeed: 3.4,         // 추격 속도(m/s) — 걷기(2.9)보다 빠르고 달리기(5.4)보다 느림
     chaseSpeedPerFloor: 0.02,
@@ -191,7 +192,7 @@ export const DIFFICULTY = {
   },
   normal: {
     label: '노말',
-    ai: { hear: 30, floorErr: 1.2, memory: 24, predict: 0.3, checkRooms: false, patience: 22, lightSense: 1 },
+    ai: { hear: 30, floorErr: 1.2, memory: 24, predict: 0.3, checkRooms: false, patience: 22, lightSense: 1, calm: 26 },
     floors: 20,
     chaseSpeed: 3.9,
     chaseSpeedPerFloor: 0.03,
@@ -217,7 +218,7 @@ export const DIFFICULTY = {
   },
   hard: {
     label: '하드',
-    ai: { hear: 43, floorErr: 0.6, memory: 38, predict: 0.7, checkRooms: true, patience: 16, lightSense: 1.5 },
+    ai: { hear: 43, floorErr: 0.6, memory: 38, predict: 0.7, checkRooms: true, patience: 16, lightSense: 1.5, calm: 18 },
     floors: 20,
     chaseSpeed: 4.4,
     chaseSpeedPerFloor: 0.035,
@@ -243,7 +244,7 @@ export const DIFFICULTY = {
   },
   nightmare: {
     label: '악몽',
-    ai: { hear: 62, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2 },
+    ai: { hear: 62, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2, calm: 12 },
     floors: 30,
     chaseSpeed: 4.8,
     chaseSpeedPerFloor: 0.02,  // 꼭대기에서는 거의 달리기 속도

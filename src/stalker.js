@@ -90,6 +90,8 @@ export class Stalker {
     this.belief = { phi: landingCenter(0), t: 0, vel: 0, fresh: 0, truePhi: landingCenter(0) };
     this.senseT = 0;
     this.inspectK = -1;
+    this.calmT = 0;        // 포기한 뒤 관심을 잃은 시간 (이동 중 그 층 근처로 돌아오지 않음)
+    this.avoidFloor = -1;
     this.group.visible = false;
   }
 
@@ -300,6 +302,13 @@ export class Stalker {
     return t === null ? null : Math.max(0, Math.min(FLOORS - 1, floorIndex(t)));
   }
 
+  /** 숨은 플레이어를 찾다 포기했다: 짐작을 지우고, 한동안 그 층 근처로는 돌아오지 않는다 (같은 자리 맴돌기 방지) */
+  loseInterest() {
+    this.forget();
+    this.calmT = this.diff.ai.calm;
+    this.avoidFloor = this.senseFloor;
+  }
+
   forget() {
     this.belief.t = 1e9;
   }
@@ -319,6 +328,17 @@ export class Stalker {
     // 높은 층일수록 플레이어 쪽으로 올 확률이 조금 더 높다
     const weight = Math.min(0.98, this.diff.elevatorWeight + 0.08 * this.heightRatio(player));
     let t = cur;
+    if (this.calmT > 0 && this.avoidFloor >= 0) {
+      // 관심을 잃은 동안: 포기한 층에서 4층 이상 떨어진 곳 — 플레이어는 위로 가야 하므로 주로 아래쪽으로 간다
+      const below = [], above = [];
+      for (let k = 0; k < FLOORS; k++) {
+        if (k === cur) continue;
+        if (k <= this.avoidFloor - 4) below.push(k);
+        else if (k >= this.avoidFloor + 4) above.push(k);
+      }
+      const pool = below.length && (Math.random() < 0.75 || !above.length) ? below : above;
+      if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+    }
     for (let i = 0; i < 12 && t === cur; i++) {
       if (bf !== null && Math.random() < weight) {
         // 짐작한 곳으로 — 주로 바로 위층에 내려 계단을 따라 내려온다. 똑똑하면 오르는 방향 앞쪽에 내린다
@@ -476,6 +496,7 @@ export class Stalker {
     this.stateTime += dt;
     this.justSpotted = false;
     this.glitchT = Math.max(0, this.glitchT - dt);
+    this.calmT = Math.max(0, this.calmT - dt);
     const ai = diff.ai;
     this.sense(player, dt);
     const elevs = game.world.elevators;
@@ -720,6 +741,7 @@ export class Stalker {
         if (door.open > 0.3 && player.inRoom && player.roomK === this.doorK) this.beginChase();
         else if (!player.inRoom && this.detect(player)) this.beginChase();
         else if (this.stateTime > diff.searchTime) {
+          this.loseInterest();
           this.goElevator(game);
           game.onSearchEnd?.();
         }
