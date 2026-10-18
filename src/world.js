@@ -185,6 +185,28 @@ export function buildWorld(scene) {
   root.add(mesh(soffit.build(), mat.soffit));
   root.add(mesh(stringer.build(), mat.stringer));
 
+  // ---------- 꼭대기: 마지막 한 바퀴 위를 덮는 경사 천장 + 계단 구멍 쪽 벽 ----------
+  // 계단은 옥상 문에서 끝나므로 그 위로 이어질 계단이 없다. 그대로 두면 꼭대기 층 위가 텅 빈 원통처럼 보이므로,
+  // 다음 계단이 있었다면 그 밑면이 있었을 자리(일정한 머리 높이)에 천장을 덮고, 난간 쪽은 벽으로 막는다.
+  const yTop = (FLOORS - 1) * FLOOR_H;
+  const headroom = TOP_Y - yTop;
+  const capCeil = new GeoBuilder();
+  const capWall = new GeoBuilder();
+  const capPhis = samples(ROOF_DOOR_PHI - TAU, (FLOORS - 1) * FLOOR_PHI, 0.04);
+  for (let j = 0; j < capPhis.length - 1; j++) {
+    const p0 = capPhis[j], p1 = capPhis[j + 1];
+    const y0 = Math.min(TOP_Y, baseY(p0) + headroom), y1 = Math.min(TOP_Y, baseY(p1) + headroom);
+    const u0 = (p0 * R_IN) / 3, u1 = (p1 * R_IN) / 3;
+    capCeil.quad(pol(S_IN, p0, y0), pol(R_OUT, p0, y0), pol(R_OUT, p1, y1), pol(S_IN, p1, y1),
+      [0, u0], [1, u0], [1, u1], [0, u1]);
+    if (TOP_Y - Math.min(y0, y1) > 0.01) {
+      capWall.quad(pol(S_IN, p0, y0), pol(S_IN, p1, y1), pol(S_IN, p1, TOP_Y), pol(S_IN, p0, TOP_Y),
+        [u0, y0 / 3], [u1, y1 / 3], [u1, TOP_Y / 3], [u0, TOP_Y / 3]);
+    }
+  }
+  root.add(mesh(capCeil.build(), mat.soffit));
+  root.add(mesh(capWall.build(), mat.soffit));
+
   // ---------- 난간 손잡이 + 난간살 ----------
   const RAIL_R = R_IN - 0.07;
   class RailCurve extends THREE.Curve {
@@ -247,9 +269,29 @@ export function buildWorld(scene) {
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.y = TOP_Y;
   root.add(ceiling);
+  // 천창: 달빛이 비치는 젖빛 유리 + 철제 창살 (밋밋하게 하얀 원판이 아니도록)
+  const skyCanvas = document.createElement('canvas');
+  skyCanvas.width = skyCanvas.height = 256;
+  const sc = skyCanvas.getContext('2d');
+  const grad = sc.createRadialGradient(150, 110, 10, 128, 128, 140);
+  grad.addColorStop(0, '#b9c3d6');
+  grad.addColorStop(0.6, '#7f8aa0');
+  grad.addColorStop(1, '#4a5263');
+  sc.fillStyle = grad;
+  sc.fillRect(0, 0, 256, 256);
+  sc.strokeStyle = '#1c1f24';
+  sc.lineWidth = 7;
+  for (let i = 0; i <= 4; i++) {
+    sc.beginPath(); sc.moveTo(i * 64, 0); sc.lineTo(i * 64, 256); sc.stroke();
+    sc.beginPath(); sc.moveTo(0, i * 64); sc.lineTo(256, i * 64); sc.stroke();
+  }
+  sc.lineWidth = 14;
+  sc.beginPath(); sc.arc(128, 128, 121, 0, Math.PI * 2); sc.stroke();
+  const skyTex = new THREE.CanvasTexture(skyCanvas);
+  skyTex.colorSpace = THREE.SRGBColorSpace;
   const skylight = new THREE.Mesh(
     new THREE.CircleGeometry(1.4, 32),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.6, 0.68), fog: false }),
+    new THREE.MeshBasicMaterial({ map: skyTex, color: new THREE.Color(0.62, 0.66, 0.74), fog: false }),
   );
   skylight.rotation.x = Math.PI / 2;
   skylight.position.y = TOP_Y + 0.01;
