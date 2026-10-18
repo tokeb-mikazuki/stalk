@@ -474,14 +474,17 @@ def main():
             m.add(marks['logo'] + 1.2 + i * 1.3, musicbox(f), 0.12, rev=0.85)
 
     # ---- 안내 방송 (TTS): 깨끗한 방송 → 일그러짐 → 마지막엔 귀 바로 옆에서 ----
-    vplan = [('v1', S('climb', -1) + 0.25, 'pa'), ('v2', marks.get('figOpen', -99) - 99 if False else marks.get('emptyOpen', -1) + 0.3, 'pa'),
+    vplan = [('v1', S('climb', -1) + 0.25, 'pa'), ('v2', marks.get('emptyOpen', -1) + 0.3, 'pa'),
              ('v3', S('glimpse', -1) + 0.15, 'warp'), ('v4', S('descend', -1) + 0.2, 'crush'),
              ('v5', S('card2', -1) + 0.15, 'deep'), ('v6', S('trap', -1) + 0.3, 'stutter'), ('v7', marks.get('cta', -1), 'close')]
+    v_end = 0
     for vid, t, style in vplan:
         if t < 0:
             continue
         v = voice(vid, style)
         if v is not None:
+            t = max(t, v_end + 0.35)  # 앞 방송과 겹치지 않게
+            v_end = t + len(v) / SR
             m.add(t, v, 0.9 if style != 'close' else 0.75, rev={'pa': 0.45, 'warp': 0.5, 'crush': 0.35, 'deep': 0.55, 'stutter': 0.3, 'close': 0.08}[style])
 
     # 카드3: 완전한 정적 (모든 소리를 거의 0으로)
