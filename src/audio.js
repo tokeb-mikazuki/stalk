@@ -1080,6 +1080,204 @@ export class AudioEngine {
     n.stop(t + dur + 0.1);
   }
 
+  // ---------------- 안내 방송 (TTS 음성) ----------------
+  /**
+   * 건물 천장 스피커로 나오는 안내 방송. url: 음성 파일(data URL), style: pa · glitch · close
+   * 한 번에 하나만 — 방송 중이면 대기열에 넣고(최대 2개), 중요하지 않은 것은 버린다
+   */
+  announce(url, style = 'pa', chime = false, important = false) {
+    if (!this.ctx) return;
+    this.voiceQueue = this.voiceQueue || [];
+    if (this.announcing) {
+      if (important || this.voiceQueue.length < 1) this.voiceQueue.push([url, style, chime]);
+      return;
+    }
+    this.announcing = true;
+    this.loadVoice(url).then((buf) => this.playAnnouncement(buf, style, chime)).catch(() => this.nextAnnouncement());
+  }
+
+  loadVoice(url) {
+    this.voiceCache = this.voiceCache || new Map();
+    if (!this.voiceCache.has(url)) {
+      this.voiceCache.set(url, fetch(url).then((r) => r.arrayBuffer()).then((ab) => this.ctx.decodeAudioData(ab)));
+    }
+    return this.voiceCache.get(url);
+  }
+
+  nextAnnouncement() {
+    this.announcing = false;
+    const n = this.voiceQueue?.shift();
+    if (n) this.announce(...n);
+  }
+
+  /** 방송 앞의 '띵—동' 차임 */
+  chime(t) {
+    const ctx = this.ctx;
+    [[659.3, 0], [523.3, 0.42]].forEach(([f, dt]) => {
+      const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f;
+      o2.frequency.value = f * 2.76;
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.18;
+      o.connect(g);
+      o2.connect(g2).connect(g);
+      this.env(g, t + dt, 0.005, 0.12, 1.4);
+      this.out(g, 0.5);
+      o.start(t + dt);
+      o2.start(t + dt);
+      o.stop(t + dt + 1.6);
+      o2.stop(t + dt + 1.6);
+    });
+  }
+
+  playAnnouncement(buf, style, chime) {
+    const ctx = this.ctx;
+    let t = ctx.currentTime + 0.05;
+    if (chime) {
+      this.chime(t);
+      t += 1.25;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    let node = src;
+    if (style !== 'close') {
+      // 천장 스피커: 좁은 대역 + 살짝 찌그러짐
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 330;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = style === 'glitch' ? 2600 : 3400;
+      const sh = ctx.createWaveShaper();
+      sh.curve = this.distCurve(style === 'glitch' ? 40 : 6);
+      node.connect(hp).connect(lp).connect(sh);
+      node = sh;
+    }
+    if (style === 'glitch') {
+      // 군데군데 끊기고 늘어진다
+      src.playbackRate.setValueAtTime(1, t);
+      for (let k = 0.3; k < buf.duration; k += 0.35 + Math.random() * 0.4) {
+        src.playbackRate.setValueAtTime(Math.random() < 0.5 ? 0.86 : 1, t + k);
+      }
+    }
+    const g = ctx.createGain();
+    g.gain.value = style === 'close' ? 0.9 : 1.15;
+    node.connect(g);
+    this.out(g, style === 'close' ? 0.05 : 0.45);
+    if (style === 'glitch') {
+      const gate = ctx.createGain();
+      g.disconnect();
+      g.connect(gate);
+      this.out(gate, 0.3);
+      for (let k = 0.4; k < buf.duration; k += 0.5 + Math.random() * 0.6) {
+        gate.gain.setValueAtTime(0.05, t + k);
+        gate.gain.setValueAtTime(1, t + k + 0.05 + Math.random() * 0.06);
+      }
+    }
+    src.start(t);
+    src.onended = () => this.nextAnnouncement();
+  }
+
+  // ---------------- 메인 화면 음악 ----------------
+  /**
+   * 트레일러의 자장가 오르골 + 따뜻한 장조 화음. 한 바퀴 돌 때마다 조금씩 늘어지고 어긋나다가,
+   * 낮은 울림만 남은 정적 뒤 처음부터 다시 — 평온해서 더 불안한 메인 화면.
+   */
+  titleMusic(on) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (!on) {
+      if (!this.tm) return;
+      const tm = this.tm;
+      this.tm = null;
+      clearInterval(tm.timer);
+      tm.bus.gain.setTargetAtTime(0, t, 0.6);
+      setTimeout(() => tm.nodes.forEach((n) => { try { n.stop(); } catch { /* 이미 정지 */ } }), 4000);
+      return;
+    }
+    if (this.tm) return;
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(0, t);
+    bus.gain.linearRampToValueAtTime(1, t + 3);
+    this.out(bus, 0.6);
+    const nodes = [];
+    // 장조 패드 (숨쉬듯)
+    const pad = ctx.createGain();
+    pad.gain.value = 0.022;
+    const padLp = ctx.createBiquadFilter();
+    padLp.type = 'lowpass';
+    padLp.frequency.value = 1600;
+    pad.connect(padLp).connect(bus);
+    for (const f of [261.6, 329.6, 392.0, 523.3]) {
+      const o = ctx.createOscillator();
+      o.frequency.value = f;
+      o.detune.value = (Math.random() - 0.5) * 6;
+      o.connect(pad);
+      o.start(t);
+      nodes.push(o);
+    }
+    const lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+    lfo.frequency.value = 0.09;
+    lfoG.gain.value = 0.008;
+    lfo.connect(lfoG).connect(pad.gain);
+    lfo.start(t);
+    nodes.push(lfo);
+    // 낮은 드론 — 한 바퀴 돌 때마다 조금씩 올라온다
+    const drone = ctx.createGain();
+    drone.gain.value = 0;
+    drone.connect(bus);
+    for (const f of [41.2, 61.7]) {
+      const o = ctx.createOscillator();
+      o.frequency.value = f;
+      o.connect(drone);
+      o.start(t);
+      nodes.push(o);
+    }
+    const LULL = [523.3, 659.3, 784.0, 659.3, 587.3, 698.5, 880.0, 784.0, 659.3, 523.3, 587.3, 493.9, 523.3];
+    const tm = (this.tm = { bus, nodes, drone, pad, cycle: 0, i: 0, next: t + 1.2 });
+    const note = (f, when, vol) => {
+      const g = ctx.createGain();
+      g.connect(bus);
+      for (const [mul, a, dec] of [[1, 1, 0.9], [1.004, 0.6, 0.9], [2.001, 0.25, 0.3]]) {
+        const o = ctx.createOscillator();
+        o.frequency.value = f * mul;
+        const og = ctx.createGain();
+        og.gain.value = a;
+        o.connect(og).connect(g);
+        o.start(when);
+        o.stop(when + dec * 4);
+      }
+      this.env(g, when, 0.004, vol, 2.2);
+    };
+    tm.timer = setInterval(() => {
+      if (this.tm !== tm) return;
+      const now = ctx.currentTime;
+      while (tm.next < now + 0.3) {
+        const prog = Math.min(1, tm.cycle / 3); // 0 → 1 : 바퀴를 돌수록 어긋난다
+        if (tm.i >= LULL.length) {
+          // 한 바퀴 끝: 3바퀴 뒤에는 긴 정적 후 처음으로
+          tm.i = 0;
+          tm.cycle++;
+          if (tm.cycle > 3) {
+            tm.cycle = 0;
+            tm.next += 6;
+            drone.gain.setTargetAtTime(0.0, tm.next - 1, 1.5);
+            pad.gain.setTargetAtTime(0.022, tm.next, 2);
+          } else {
+            tm.next += 1.2;
+            drone.gain.setTargetAtTime(0.012 * tm.cycle, tm.next, 3);
+            pad.gain.setTargetAtTime(0.022 * (1 - 0.3 * tm.cycle), tm.next, 3);
+          }
+          continue;
+        }
+        const f = LULL[tm.i] * (1 - 0.05 * prog) * (1 + (Math.random() - 0.5) * 0.008 * prog);
+        note(f, tm.next, 0.05 * (1 - 0.35 * prog));
+        tm.next += 0.55 * (1 + 0.8 * prog) + (prog > 0.6 && Math.random() < 0.15 ? 0.6 : 0);
+        tm.i++;
+      }
+    }, 100);
+  }
+
   /** 지속음 정지 (게임오버 화면 등) */
   silence(on) {
     if (!this.ctx) return;

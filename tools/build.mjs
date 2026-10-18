@@ -29,7 +29,7 @@ const options = {
   minify: !serve,
   sourcemap: serve ? 'inline' : false,
   legalComments: 'none',
-  loader: { '.png': 'dataurl' },
+  loader: { '.png': 'dataurl', '.mp3': 'dataurl' },
   write: false,
   logLevel: 'warning',
 };

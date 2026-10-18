@@ -16,6 +16,7 @@ import { TouchControls, isTouchDevice } from './touch.js';
 import { Progress, ACHIEVEMENTS } from './achievements.js';
 import { TorchFX } from './fx.js';
 import { Elevator } from './elevator.js';
+import { VOICE, voiceText } from './voice.js';
 
 const NOTES = [
   { k: 1, title: '관리일지 — 3월 2일', body: '계단 청소 중 엘리베이터가 혼자 움직였다.\n아무도 타지 않았는데 층수 표시기가 계속 바뀐다.\n\n그건 엘리베이터를 탄다. 버튼을 누르고, 문 앞에서 기다린다.\n엘리베이터가 움직이면… 계단이 조용해진다.' },
@@ -499,6 +500,7 @@ class Game {
     this.touch.show(false);
     this.unlock();
     this.audio.silence(false);
+    this.audio.titleMusic(true);
     this.clearItems();
     this.stalker.reset(DIFFICULTY.normal);
     this.elevator.reset(0);
@@ -519,6 +521,7 @@ class Game {
     this.audio.init();
     this.audio.setVolume(this.settings.vol);
     this.audio.silence(false);
+    this.audio.titleMusic(false);
     this.diffKey = diffKey;
     this.diff = DIFFICULTY[diffKey];
     this.ensureWorld(this.diff.floors);
@@ -562,9 +565,9 @@ class Game {
         }
       } catch { /* 전체 화면 미지원 */ }
     }
-    this.director.after(1.5, () => this.hint('intro-goal', `목표: 맨 위층(${FLOORS}F) 옥상 문으로 탈출 — 벽의 층 번호를 확인하라`, 4));
-    this.director.after(5.5, () => this.hint('intro-elevator', '엘리베이터 표시기 = 엘리베이터의 현재 층 · 송신도 엘리베이터를 탄다', 4.5));
-    this.director.after(10.5, () => this.hint('intro-door', '초록 비상구 표시 문 = 숨을 곳 · [E] 열기/닫기', 4));
+    this.director.after(1.5, () => this.hint('intro-goal'));
+    this.director.after(9.5, () => this.hint('intro-elevator'));
+    this.director.after(17.5, () => this.hint('intro-door'));
   }
 
   pause() {
@@ -607,7 +610,7 @@ class Game {
     }
     document.body.classList.remove('menu-on');
     if (!this.trap) this.stalker.ambush(this.player, this); // 엘리베이터 함정 중이면 이미 끝이 정해져 있다
-    this.hud.msg('이것으로는 숨을 수 없다', 3.5);
+    this.say('pause');
   }
 
   debugJump() {
@@ -626,12 +629,21 @@ class Game {
   }
 
   /** 안내 문구: 처음 한 번만 표시하고 브라우저에 기록 (다음 판부터는 안 뜸) */
-  hint(id, text, dur = 4) {
+  hint(id) {
     if (this.hints.has(id)) return;
     this.hints.add(id);
     this.progress.data.hints = [...this.hints];
     this.progress.save();
-    this.hud.msg(text, dur);
+    this.say(id);
+  }
+
+  /** 건물 안내 방송: 화면 글자 + 같은 목소리의 음성 (설정에서 음성만 끌 수 있음) */
+  say(id, { voiceOnly = false, cls } = {}) {
+    const v = VOICE[id];
+    if (!v) return;
+    const text = voiceText(id, FLOORS);
+    if (!voiceOnly) this.hud.msg(text, Math.max(3, text.length * 0.11), cls);
+    if (this.settings.voice) this.audio.announce(v.url, v.style, v.chime, !!v.chime);
   }
 
   // ------------------------------------------------------------------ 아이템
@@ -802,7 +814,7 @@ class Game {
       a.click(0.6);
       a.rattle(this.camera.position);
       this.world.car.btnMat.color.setHex(Math.random() < 0.5 ? 0x5a1a1a : 0x3a3a2a);
-      this.hud.msg('버튼이 고장나 있다', 2);
+      this.say('carpanel');
     }
   }
 
@@ -1051,8 +1063,7 @@ class Game {
     this.glitchPulse(0.8);
     this.director.flicker(2.5);
     this.hud.warn(reason === 'final' ? 'RUN' : 'FOUND YOU');
-    if (reason === 'hide') this.hud.msg('들켰다 — 지금 이동하라', 3);
-    if (this.settings.voice) speak(Math.random() < 0.5 ? '찾았다' : '어디 가');
+    if (reason === 'hide') this.say('found');
   }
 
   glitchPulse(v) {
@@ -1134,7 +1145,7 @@ class Game {
 
   onChaseEnd(how) {
     if (how === 'hid') {
-      this.hud.msg('송신이 문 앞에 있다 — CCTV로 확인', 3);
+      this.say('atDoor');
       return;
     }
     this.chases++;
@@ -1317,11 +1328,11 @@ class Game {
     }
     if (ev.trip) {
       this.audio.fall();
-      if (ev.tripExhausted && !this.hints.has('tripTip')) this.hint('tripTip', 'TIP: 체력이 바닥난 채로 달리면 넘어질 수 있다', 4.5);
+      if (ev.tripExhausted && !this.hints.has('tripTip')) this.hint('tripTip');
       else this.hud.msg('넘어졌다', 1.8);
       this.glitchPulse(0.35);
     }
-    if (p.inRoom) this.hint('room', '[E] 문 닫기 → 송신이 못 들어옴 · 오래 숨으면 들킨다 · 모니터 = 전 층 CCTV', 4.5);
+    if (p.inRoom) this.hint('room');
 
 
     this.elevator.update(dt);
@@ -1358,14 +1369,14 @@ class Game {
       this.audio.laughAt(s.pos, 1);
       this.glitchPulse(0.5);
       p.shake = Math.max(p.shake, 0.5);
-      this.hint('chase', '추격 — 달려서 따돌리거나 비상문에 숨어 문을 닫아라', 3.5);
+      this.hint('chase');
     }
 
     // ---- 근접도 / 공포 ----
     let d;
     if (s.inElevator) d = Math.abs(this.elevator.floor * FLOOR_H - p.footY) * 1.3 + 6;
     else d = s.distTo(p);
-    if (s.visible && d < 26 && !s.chasing) this.hint('see', '송신 — 들키기 전에 피하라', 3);
+    if (s.visible && d < 26 && !s.chasing) this.hint('see');
     const hidden = p.inRoom && this.world.fireDoors[p.roomK].open < 0.3;
     const prox = Math.max(0, Math.min(1, 1 - d / 30)) * (hidden ? 0.75 : 1);
     const targetFear = Math.max(prox, s.chasing ? 0.55 + prox * 0.45 : 0);
@@ -1503,6 +1514,7 @@ class Game {
       document.getElementById('dead-sub').textContent = subs[Math.floor(Math.random() * subs.length)];
       document.body.classList.add('menu-on');
       this.hud.screen('dead');
+      this.say('dead', { voiceOnly: true });
     }
   }
 
@@ -1525,6 +1537,7 @@ class Game {
       ]);
       if (this.unlockedNightmare) this.hud.toast('악몽 모드 해금 — 30층');
       this.hud.screen('win');
+      this.say('win', { voiceOnly: true });
       const after = document.querySelector('#win .after');
       after.classList.remove('on');
       // 마지막 한 번의 놀람
@@ -1594,23 +1607,6 @@ class Game {
       roof.open = Math.min(roof.target, roof.open + dt * 0.7);
       roof.pivot.rotation.y = -1.7 * (1 - Math.pow(1 - roof.open, 3));
     }
-  }
-}
-
-function speak(text) {
-  try {
-    const ss = window.speechSynthesis;
-    if (!ss) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ko-KR';
-    u.pitch = 0.1;
-    u.rate = 0.65;
-    u.volume = 0.8;
-    const v = ss.getVoices().find((x) => x.lang && x.lang.startsWith('ko'));
-    if (v) u.voice = v;
-    ss.speak(u);
-  } catch {
-    /* TTS 미지원 */
   }
 }
 
@@ -1713,6 +1709,7 @@ async function boot() {
   game.audio.init();
   game.audio.setVolume(game.settings.vol);
   game.audio.uiStart();
+  game.audio.titleMusic(true);
   game.refreshTitle();
   game.hud.screen('title');
 }

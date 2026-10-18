@@ -71,7 +71,7 @@ export class Director {
         this.hideWarned = true;
         this.flicker(1.8);
         g.audio.whisper(Math.random() < 0.5 ? -0.8 : 0.8, 1.8, 0.4);
-        g.hud.msg('같은 층에 너무 오래 있었다 — 이동하라', 3);
+        g.say('linger');
       }
       if (p.floorTime > diff.hideThreshold) {
         p.floorTime = 0;
