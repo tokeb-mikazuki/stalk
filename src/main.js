@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import songsinUrl from '../assets/songsin.png';
 import {
   FLOOR_PHI, FLOORS, FLOOR_H, R_IN, R_MID, DIFFICULTY,
-  baseY, onLanding, landingCenter, polar, setFloors,
+  baseY, onLanding, landingCenter, polar, setFloors, pathDist, fireDoorPhi, R_OUT,
 } from './config.js';
 import { buildWorld } from './world.js';
 import { Player } from './player.js';
@@ -1024,6 +1024,8 @@ class Game {
     this.noteT = reading ? (this.noteT || 0) + dt : 0;
     if (this.noteT > 30) this.breakPause();
     const ev = p.update(dt, reading ? {} : this.input, this.diff, this.world.fireDoors);
+    // 송신이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다
+    if (this.doorBlocked) p.floorTime = Math.max(0, p.floorTime - dt);
     if (p.torchOn) this.run.torchTime += dt;
     if (p.inRoom) this.run.enteredRoom = true;
     if (ev.trip) this.run.trips++;
@@ -1046,6 +1048,8 @@ class Game {
 
 
     s.update(dt, p, this);
+    this.doorBlocked = p.inRoom && !s.inElevator && s.roomK < 0 && s.floor === p.roomK
+      && pathDist(s.phi, s.r, fireDoorPhi(p.roomK), R_OUT - 0.45) < 7;
     this.director.update(dt);
     this.updateCctv(dt);
     if (s.justSpotted) {
