@@ -17,6 +17,8 @@ import { Progress, ACHIEVEMENTS } from './achievements.js';
 import { TorchFX } from './fx.js';
 import { Elevator } from './elevator.js';
 import { VOICE, voiceText } from './voice.js';
+import { Ending } from './ending.js';
+import { DebugPanel } from './debug.js';
 
 const CCTV_FPS = 8; // 감시 카메라 화면은 초당 8장
 
@@ -95,6 +97,7 @@ class Game {
     this.audio = new AudioEngine();
     this.audio.volume = this.settings.vol;
     this.hud = new Hud();
+    this.debug = new DebugPanel(this); // 코나미 코드(↑↑↓↓←→←→BA)로 여는 디버그 패널
     this.progress.onUnlock = (a) => {
       this.hud.toast(`도전과제 달성 — ${a.name}`);
       this.audio.ctx && this.audio.pickup(true);
@@ -217,16 +220,17 @@ class Game {
       ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyC: 'crouch', ControlLeft: 'crouch', ControlRight: 'crouch',
     };
     window.addEventListener('keydown', (e) => {
+      if (this.debug.open) return; // 디버그 패널이 열려 있으면 게임 조작은 쉰다
       if (keyMap[e.code]) {
         this.input[keyMap[e.code]] = true;
         if (this.state === 'playing') e.preventDefault();
       }
       if (e.repeat) return;
-      // 원작의 디버그 기능: Pause 키 5회 → 층 이동
+      // 원작의 디버그 기능: Pause 키 5회 → 디버그 패널 (코나미 코드로도 열린다)
       if (e.code === 'Pause') {
         if (++this.debugCount >= 5) {
           this.debugCount = 0;
-          this.debugJump();
+          this.debug.toggle(true);
         }
       } else {
         this.debugCount = 0;
@@ -307,7 +311,7 @@ class Game {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       this.lockTime = performance.now();
-      if (!locked && this.state === 'playing' && !this.hud.noteOpen && !this.ignoreUnlock) this.pause();
+      if (!locked && this.state === 'playing' && !this.hud.noteOpen && !this.ignoreUnlock && !this.debug.open) this.pause();
       this.ignoreUnlock = false;
     });
   }
@@ -505,6 +509,7 @@ class Game {
     this.touch.show(false);
     this.unlock();
     this.audio.silence(false);
+    this.leaveEnding();
     this.audio.titleMusic(true);
     this.clearItems();
     this.stalker.reset(DIFFICULTY.normal);
@@ -527,6 +532,8 @@ class Game {
     this.audio.setVolume(this.settings.vol);
     this.audio.silence(false);
     this.audio.titleMusic(false);
+    this.leaveEnding();
+    this.huntFloor = null;
     this.diffKey = diffKey;
     this.diff = DIFFICULTY[diffKey];
     this.ensureWorld(this.diff.floors);
@@ -616,21 +623,6 @@ class Game {
     document.body.classList.remove('menu-on');
     if (!this.trap) this.stalker.ambush(this.player, this); // 엘리베이터 함정 중이면 이미 끝이 정해져 있다
     this.say('pause');
-  }
-
-  debugJump() {
-    if (this.state !== 'playing') return;
-    this.unlock();
-    const input = window.prompt(`Debug: 이동할 층 입력 (1~${FLOORS})`, `${this.player.floor + 1}`);
-    const n = parseInt(input, 10);
-    if (!isNaN(n)) {
-      const k = Math.max(1, Math.min(FLOORS, n)) - 1;
-      const keep = { battery: this.player.battery, torchOn: this.player.torchOn, maxFloor: this.player.maxFloor };
-      this.player.reset(landingCenter(k) - 0.3);
-      Object.assign(this.player, keep);
-      this.player.maxFloor = Math.max(keep.maxFloor, k);
-    }
-    this.clock.getDelta();
   }
 
   /** 안내 문구: 처음 한 번만 표시하고 브라우저에 기록 (다음 판부터는 안 뜸) */
@@ -809,6 +801,7 @@ class Game {
     } else if (t.kind === 'button') {
       const el = this.elevator;
       a.click(0.5);
+      this.world.elevators[t.k].press();
       if (el.doorK === t.k) el.hold(4);
       else {
         el.call(t.k, 'player');
@@ -1067,6 +1060,9 @@ class Game {
   // ------------------------------------------------------------------ 사건
   triggerHunt(reason, offset = 0) {
     if (this.state !== 'playing') return;
+    // 사냥(문을 부술 수 있는 추격)은 들킨 그 층에만 유효하다 — 다른 층으로 옮기면 끝난다
+    const p = this.player;
+    this.huntFloor = p.inRoom ? p.roomK : p.floor;
     const r = this.stalker.hunt(this.player, offset);
     if (r === 'already') return;
     this.audio.glitch(0.5);
@@ -1074,6 +1070,22 @@ class Game {
     this.director.flicker(2.5);
     this.hud.warn(reason === 'final' ? 'RUN' : 'FOUND YOU');
     if (reason === 'hide') this.say('found');
+  }
+
+  /** FOUND YOU 뒤 다른 층으로 옮기는 데 성공하면 사냥을 멈춘다 (다음 층 비상실 문을 부수고 들어오지 않게) */
+  updateHuntFloor() {
+    if (this.huntFloor === null || this.huntFloor === undefined || this.trap) return;
+    const p = this.player, s = this.stalker;
+    const here = p.inRoom ? p.roomK : p.floor;
+    const active = s.hunting || s.huntQueued || s.burst;
+    if (!active) {
+      this.huntFloor = null; // 사냥이 이미 끝났다
+      return;
+    }
+    if (here !== this.huntFloor) {
+      this.huntFloor = null;
+      if (s.cancelHunt(this) === 'vanished') this.onChaseEnd('vanish');
+    }
   }
 
   glitchPulse(v) {
@@ -1182,6 +1194,7 @@ class Game {
 
   // ------------------------------------------------------------------ 종료
   die() {
+    if (this.debug.god) return; // 디버그: 무적
     this.closeCctv();
     this.progress.addDeath();
     this.state = 'dying';
@@ -1222,15 +1235,35 @@ class Game {
     this.touch.show(false);
     this.player.frozen = true;
     this.hud.setPrompt('');
+    this.hud.show(false);
+    this.closeCctv();
     this.world.roof.target = 1;
-    this.audio.wind(0.6, 7);
+    this.audio.wind(0.5, 16);
     this.audio.silence(true);
     this.stalker.group.visible = false;
+    // 옥상의 아침 (처음 탈출할 때 한 번 만든다)
+    if (!this.ending) this.ending = new Ending(this.world.mat?.concrete?.map);
+    this.ending.reset();
+    this.endingOn = false;
+  }
+
+  /** 엔딩 장면을 끄고 계단실 색감으로 되돌린다 */
+  leaveEnding() {
+    if (!this.endingOn && !this.ending) return;
+    this.endingOn = false;
+    this.audio.dawnMusic(false);
+    const u = this.post.uniforms;
+    u.uSat.value = 0.16;
+    u.uWarm.value = 0;
+    u.uExposure.value = 0.78;
+    u.uFlash.value = 0;
   }
 
   // ------------------------------------------------------------------ 루프
   frame() {
-    const dt = Math.min(0.05, this.clock.getDelta());
+    const raw = Math.min(0.05, this.clock.getDelta());
+    const dt = this.state === 'playing' ? Math.min(0.1, raw * this.debug.speed) : raw; // 디버그: 게임 속도
+    this.debug.update(raw);
     if (this.state === 'loading') return;
     const u = this.post.uniforms;
     u.uTime.value += dt;
@@ -1243,6 +1276,7 @@ class Game {
     else if (this.state === 'playing') this.updatePlaying(dt);
     else if (this.state === 'dying') this.updateDying(dt);
     else if (this.state === 'winning') this.updateWinning(dt);
+    else if (this.state === 'won' && this.endingOn) this.updateEnding(dt);
 
     if (this.state !== 'paused') {
       this.updateLamps(dt);
@@ -1287,6 +1321,8 @@ class Game {
         this.irLight.intensity = 0;
       }
       this.post.render(null, null, this.cctvFull.texture);
+    } else if (this.endingOn) {
+      this.post.render(this.ending.scene, this.ending.camera);
     } else {
       this.post.render(this.scene, this.camera);
     }
@@ -1343,6 +1379,11 @@ class Game {
     this.noteT = reading ? (this.noteT || 0) + dt : 0;
     if (this.noteT > 30) this.breakPause();
     const ev = p.update(dt, reading ? {} : this.input, this.diff, this.world.fireDoors, this.elevator);
+    if (this.debug.infinite) {
+      p.stamina = 100;
+      p.exhausted = false;
+      p.battery = 100;
+    }
     // 송신이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다
     if (this.doorBlocked) p.floorTime = Math.max(0, p.floorTime - dt);
     if (p.torchOn) this.run.torchTime += dt;
@@ -1383,7 +1424,11 @@ class Game {
         }
       }
     }
-    s.update(dt, p, this);
+    if (!this.debug.freeze) s.update(dt, p, this);
+    if (this.debug.hide) {
+      s.visible = false;
+      s.group.visible = false;
+    }
     // 송신이 엘리베이터에서 내리거나 탈 때마다 기척으로 알린다
     const onStairs = !s.inElevator;
     if (!this.trap && this.stalkerOnStairs !== undefined && onStairs !== this.stalkerOnStairs) {
@@ -1393,6 +1438,7 @@ class Game {
     this.doorBlocked = p.inRoom && !s.inElevator && s.roomK < 0 && s.floor === p.roomK
       && pathDist(s.phi, s.r, fireDoorPhi(p.roomK), R_OUT - 0.45) < 7;
     this.director.update(dt);
+    this.updateHuntFloor();
     this.updateCctv(dt);
     if (s.justSpotted) {
       this.run.chased++;
@@ -1550,12 +1596,31 @@ class Game {
 
   updateWinning(dt) {
     this.winT += dt;
+    const t = this.winT;
     const u = this.post.uniforms;
-    u.uFlash.value = Math.min(1, Math.max(0, (this.winT - 0.6) / 2.2));
     u.uRed.value *= 0.9;
     u.uFear.value *= 0.95;
-    this.player.update(dt, {}, this.diff, this.world.fireDoors);
-    if (this.winT > 3.2 && this.state === 'winning') {
+    if (!this.endingOn) {
+      // 문이 열리고 바깥의 빛이 쏟아져 들어온다
+      this.player.update(dt, {}, this.diff, this.world.fireDoors);
+      this.world.roof.outside.material.color.setScalar(0.5 + Math.min(1, t / 1.4) * 3);
+      u.uFlash.value = Math.min(0.92, Math.max(0, (t - 0.5) / 1.1) * 0.92);
+      if (t >= 1.6) {
+        // 문밖으로 — 옥상의 새벽
+        this.endingOn = true;
+        this.audio.dawnMusic(true);
+      }
+      return;
+    }
+    const e = t - 1.6;
+    this.updateEnding(dt);
+    u.uFlash.value = Math.max(0, 0.92 - e / 2.2);
+    u.uSat.value = 0.16 + (1 - 0.16) * Math.min(1, e / 4);
+    u.uWarm.value = Math.min(1, e / 3);
+    u.uExposure.value = 0.78 + 0.12 * Math.min(1, e / 4);
+    u.uFear.value = 0;
+    u.uFade.value = 0;
+    if (this.winT > 12.5 && this.state === 'winning') {
       this.state = 'won';
       this.unlock();
       this.hud.show(false);
@@ -1570,18 +1635,16 @@ class Game {
       this.say('win', { voiceOnly: true });
       const after = document.querySelector('#win .after');
       after.classList.remove('on');
-      // 마지막 한 번의 놀람
+      // 한참 뒤, 아주 작게
       setTimeout(() => {
-        if (this.state !== 'won') return;
-        const sc = document.getElementById('scare');
-        sc.classList.add('on');
-        this.audio.glitch(0.6);
-        setTimeout(() => {
-          sc.classList.remove('on');
-          after.classList.add('on');
-        }, 170);
-      }, 5200);
+        if (this.state === 'won') after.classList.add('on');
+      }, 9000);
     }
+  }
+
+  updateEnding(dt) {
+    this.ending.resize(this.camera.aspect);
+    this.ending.update(dt);
   }
 
   updateLamps(dt) {
@@ -1614,6 +1677,7 @@ class Game {
 
   updateDoors(dt) {
     for (const e of this.world.elevators) {
+      e.tickButtons(dt);
       if (e.open !== e.target) {
         const step = dt * 1.3;
         e.open = e.target > e.open ? Math.min(e.target, e.open + step) : Math.max(e.target, e.open - step);

@@ -177,13 +177,16 @@
     .stats .st.hl b { color: #ff5a5a; }
     .end-menu { display: flex; gap: 36px; margin-top: 4vh; justify-content: center; animation: fadeIn 1.5s 1.2s both; }
     .end-menu .mi { padding-left: 28px; }
-    #win { background: #efeee9; color: #1a1a1a; }
-    #win .big { color: #161616; }
-    #win .sub { color: #77746c; }
-    #win .stats { border-color: #cfccc4; }
-    #win .stats .st { border-color: #dad7cf; }
-    #win .stats .st span { color: #8a877f; }
-    #win .stats .st b { color: #1b1b1b; }
+    /* 탈출: 옥상의 아침 풍경 위에 그대로 얹는다 */
+    #win { background: linear-gradient(to bottom, rgba(20,14,22,0) 0%, rgba(20,14,22,.08) 45%, rgba(18,12,20,.6) 100%); color: #fff8ef; }
+    #win .big { color: #fffaf2; text-shadow: 0 0 40px rgba(255,190,120,.65), 0 2px 18px rgba(60,20,10,.5); }
+    #win .sub { color: #ffe6c8; text-shadow: 0 1px 8px rgba(40,10,0,.6); }
+    #win .stats { border-color: rgba(255,236,210,.35); }
+    #win .stats .st { border-color: rgba(255,236,210,.22); }
+    #win .stats .st span { color: #f4dcc0; }
+    #win .stats .st b { color: #fffaf2; }
+    #win .stats .st.hl b { color: #ffd08a; }
+    #win .mi { color: #fff3e2; text-shadow: 0 1px 6px rgba(40,10,0,.6); }
     #win .stats .st.hl b { color: #9b1118; }
     #win .mi { color: #4a4740; }
     #win .mi:hover, #win .mi.sel { color: #000; }
@@ -521,7 +524,7 @@
 
   <section id="win" class="screen">
     <div class="big">탈 출</div>
-    <div class="sub">옥상의 바람이 차갑다</div>
+    <div class="sub">아침이 밝았다</div>
     <div class="stats"></div>
     <div class="end-menu">
       <button class="mi" data-act="retry" data-nav>다시 하기</button>

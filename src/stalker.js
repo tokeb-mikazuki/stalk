@@ -457,6 +457,36 @@ export class Stalker {
     this.updateMesh(0);
   }
 
+  /** 사냥 취소: 문을 부술 권한을 거두고, 관심을 잃고, 보이는 곳에 있었다면 사라진다 */
+  cancelHunt(game) {
+    if (this.state === 'trapWait') return 'none';
+    this.hunting = false;
+    this.huntQueued = false;
+    this.burst = false;
+    this.doorWait = 0;
+    this.loseInterest();
+    const el = game.elevator;
+    if (this.state === 'elevator') {
+      el.speedMul = 1;
+      if (this.rideSent) {
+        this.elevTarget = this.pickElevatorTarget(game.player);
+        el.send(this.elevTarget);
+      } else this.elevTarget = null;
+      return 'rerouted';
+    }
+    if (this.state === 'vanish') return 'none';
+    if (['chase', 'search', 'approach', 'arriving', 'linger', 'wander'].includes(this.state)) {
+      if (this.state === 'arriving') {
+        el.occupant = null;
+        el.speedMul = 1;
+      }
+      this.setState('vanish');
+      this.timer = 0;
+      return 'vanished';
+    }
+    return 'none';
+  }
+
   beginChase(burst = false) {
     this.setState('chase');
     this.chaseTime = 0;
@@ -633,6 +663,7 @@ export class Stalker {
         const rem = this.moveToward(tPhi, R_OUT - 0.55, diff.roamSpeed * 1.2, dt);
         if (rem < 0.2) {
           el.call(this.doorK, 'stalker');
+          game.world.elevators[this.doorK].press(); // 송신도 버튼을 누른다
           this.setState('waitCar');
         }
         if (this.detect(player)) this.beginChase();

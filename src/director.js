@@ -1,17 +1,17 @@
 // 공포 연출 감독: 층 체류 페널티, 무작위 공포 이벤트, 조명 깜빡임
 import * as THREE from 'three';
 import {
-  TAU, FLOORS, FLOOR_H, R_IN, R_MID, PHI_MAX, PHI_MIN, baseY, pathDist, polar, landingCenter, R_OUT,
+  TAU, FLOORS, FLOOR_H, R_MID, baseY, polar, landingCenter, R_OUT,
 } from './config.js';
 
+// 송신이 이유 없이 모습을 드러내거나(환영) 층 번호가 '송신'으로 바뀌는 연출은 넣지 않는다 —
+// 보이는 송신은 언제나 진짜 송신이다. 무작위 이벤트는 소리·빛·엘리베이터로만 불안을 만든다.
 const EVENTS = [
-  ['peek', 3],
   ['blackout', 2],
-  ['ding', 2],
-  ['footsteps', 2],
+  ['ding', 2.5],
+  ['footsteps', 3],
   ['whisper', 2],
   ['laugh', 1.5],
-  ['sign', 1.2],
 ];
 
 export class Director {
@@ -119,28 +119,11 @@ export class Director {
 
   fire(name) {
     const g = this.g, p = g.player, s = g.stalker, a = g.audio;
-    const far = s.inElevator || pathDist(s.phi, s.r, p.phi, p.r) > 30;
     switch (name) {
-      case 'peek': {
-        if (!far || p.inRoom) return this.fire('whisper');
-        // 맞은편 난간 너머, 한두 층 위에서 내려다봄 (참고 이미지의 구도)
-        const up = Math.random() < 0.5 ? 0 : TAU;
-        let phi = p.phi + Math.PI + (Math.random() - 0.5) * 0.7 + up;
-        if (phi > PHI_MAX) phi = p.phi + Math.PI * 0.6;
-        if (phi > PHI_MAX) return this.fire('whisper');
-        this.showPhantom(phi, R_IN + 0.3, 4.5, 'peek');
-        break;
-      }
       case 'blackout': {
         this.blackoutT = 1.7;
         this.torchKill = 1.7;
         a.drone(0.35, 2.6);
-        if (far && !p.inRoom) {
-          // 어둠 속, 바로 앞 계단에 서 있다
-          const ahead = Math.cos(p.yaw + p.phi) < 0 ? 1 : -1; // 바라보는 방향이 계단 위쪽인지
-          const phi = Math.max(PHI_MIN, Math.min(PHI_MAX, p.phi + (ahead * 4.2) / R_MID));
-          this.showPhantom(phi, R_MID, 1.7, 'blackout');
-        }
         break;
       }
       case 'ding': {
@@ -168,13 +151,6 @@ export class Director {
       case 'laugh': {
         const k = Math.floor(Math.random() * FLOORS);
         a.laughAt(polar(R_OUT + 0.8, landingCenter(k), k * FLOOR_H + 1.2, new THREE.Vector3()), 0.9);
-        break;
-      }
-      case 'sign': {
-        this.signK = p.floor;
-        this.signT = 2.4;
-        this.setSignGlitch(p.floor, true);
-        a.glitch(0.25);
         break;
       }
     }

@@ -1332,6 +1332,112 @@ export class AudioEngine {
     }, 100);
   }
 
+  // ---------------- 탈출 엔딩 음악 ----------------
+  /**
+   * 옥상의 아침: 따뜻한 화음 진행 + 메인 화면의 자장가를 이번엔 어긋남 없이 끝까지 + 새소리.
+   */
+  dawnMusic(on) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    if (!on) {
+      if (!this.dm) return;
+      const dm = this.dm;
+      this.dm = null;
+      clearInterval(dm.timer);
+      dm.bus.gain.setTargetAtTime(0, t0, 0.8);
+      return;
+    }
+    if (this.dm) return;
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(0, t0);
+    bus.gain.linearRampToValueAtTime(1, t0 + 2.5);
+    this.out(bus, 0.55);
+    // 화음 진행: C — G/B — Am — F — C — G — F — C
+    const CH = [[261.6, 329.6, 392.0], [246.9, 293.7, 392.0], [220.0, 261.6, 329.6], [174.6, 220.0, 261.6],
+      [261.6, 329.6, 392.0], [196.0, 246.9, 293.7], [174.6, 220.0, 261.6], [261.6, 329.6, 392.0]];
+    const chordLen = 3.2;
+    const chord = (notes, when) => {
+      const g = ctx.createGain();
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 1400;
+      g.connect(lp).connect(bus);
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(0.03, when + 1.0);
+      g.gain.setValueAtTime(0.03, when + chordLen - 0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + chordLen + 1.2);
+      for (const f of [notes[0] / 2, ...notes]) {
+        for (const [type, det] of [['sine', 0], ['triangle', 4]]) {
+          const o = ctx.createOscillator();
+          o.type = type;
+          o.frequency.value = f;
+          o.detune.value = det;
+          o.connect(g);
+          o.start(when);
+          o.stop(when + chordLen + 1.4);
+        }
+      }
+    };
+    const note = (f, when, vol) => {
+      const g = ctx.createGain();
+      g.connect(bus);
+      for (const [mul, a, dec] of [[1, 1, 1.1], [1.003, 0.5, 1.1], [2.0, 0.22, 0.4]]) {
+        const o = ctx.createOscillator();
+        o.frequency.value = f * mul;
+        const og = ctx.createGain();
+        og.gain.value = a;
+        o.connect(og).connect(g);
+        o.start(when);
+        o.stop(when + dec * 4);
+      }
+      this.env(g, when, 0.004, vol, 2.4);
+    };
+    const chirp = (when) => {
+      const n = 2 + Math.floor(Math.random() * 4);
+      const base = 2600 + Math.random() * 1800;
+      const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      const g = ctx.createGain();
+      g.gain.value = 0.018 + Math.random() * 0.02;
+      if (pan) {
+        pan.pan.value = Math.random() * 2 - 1;
+        g.connect(pan).connect(bus);
+      } else g.connect(bus);
+      for (let i = 0; i < n; i++) {
+        const o = ctx.createOscillator();
+        const eg = ctx.createGain();
+        const tt = when + i * (0.08 + Math.random() * 0.06);
+        o.frequency.setValueAtTime(base * (0.9 + Math.random() * 0.2), tt);
+        o.frequency.exponentialRampToValueAtTime(base * (1.25 + Math.random() * 0.4), tt + 0.06);
+        this.env(eg, tt, 0.005, 1, 0.07);
+        o.connect(eg).connect(g);
+        o.start(tt);
+        o.stop(tt + 0.12);
+      }
+    };
+    const LULL = [523.3, 659.3, 784.0, 659.3, 587.3, 698.5, 880.0, 784.0, 659.3, 523.3, 587.3, 493.9, 523.3];
+    const dm = (this.dm = { bus, ci: 0, nextChord: t0 + 0.2, mi: 0, nextNote: t0 + 3.0, nextBird: t0 + 1.5 });
+    dm.timer = setInterval(() => {
+      if (this.dm !== dm) return;
+      const now = ctx.currentTime;
+      while (dm.nextChord < now + 0.4) {
+        chord(CH[dm.ci % CH.length], dm.nextChord);
+        dm.ci++;
+        dm.nextChord += chordLen;
+      }
+      while (dm.nextNote < now + 0.4) {
+        // 자장가 — 이번엔 늘어지지도 어긋나지도 않는다. 한 바퀴 뒤엔 한 옥타브 아래로 조용히
+        const oct = Math.floor(dm.mi / LULL.length) % 2 ? 0.5 : 1;
+        note(LULL[dm.mi % LULL.length] * oct, dm.nextNote, 0.045);
+        dm.mi++;
+        dm.nextNote += dm.mi % LULL.length === 0 ? 2.4 : 0.6;
+      }
+      while (dm.nextBird < now + 0.4) {
+        chirp(dm.nextBird);
+        dm.nextBird += 0.5 + Math.random() * 1.6;
+      }
+    }, 100);
+  }
+
   /** 지속음 정지 (게임오버 화면 등) */
   silence(on) {
     if (!this.ctx) return;

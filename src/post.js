@@ -39,7 +39,7 @@ uniform sampler2D tDiffuse;
 uniform sampler2D tBloom;
 uniform float uBloom;
 uniform vec2 uRes;
-uniform float uTime, uFear, uRed, uGlitch, uFade, uFlash, uSat, uExposure, uGamma, uCctv, uWarp;
+uniform float uTime, uFear, uRed, uGlitch, uFade, uFlash, uSat, uExposure, uGamma, uCctv, uWarp, uWarm;
 varying vec2 vUv;
 
 float rand(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -82,7 +82,8 @@ void main() {
   float chroma = (mx - mn) / max(mx, 1e-3);
   float keep = smoothstep(0.45, 0.8, chroma) * smoothstep(0.12, 0.45, mx);
   col = mix(vec3(l), col, mix(uSat, 0.95, keep));
-  col *= vec3(0.96, 1.0, 1.05);
+  // 냉색(계단실) ↔ 따뜻한 아침빛(탈출 엔딩)
+  col *= mix(vec3(0.96, 1.0, 1.05), vec3(1.07, 1.0, 0.9), uWarm);
   col = clamp((col - 0.5) * 1.12 + 0.5, 0.0, 1.0);
 
   // CCTV: 녹색 단색 + 굵은 주사선 + 잡음 (붉은 경보·공포 효과는 끔)
@@ -105,7 +106,7 @@ void main() {
 
   // 필름 그레인 + 주사선
   float g = rand(uv * uRes + fract(uTime) * 100.0) - 0.5;
-  col += g * (0.07 + 0.1 * uFear + 0.25 * uGlitch);
+  col += g * (0.07 + 0.1 * uFear + 0.25 * uGlitch) * (1.0 - 0.65 * uWarm);
   col *= 1.0 - 0.06 * uGlitch * step(0.5, fract(uv.y * uRes.y * 0.5));
 
   col = mix(col, vec3(0.0), uFade);
@@ -138,6 +139,7 @@ export class Post {
       uGamma: { value: 1 },
       uCctv: { value: 0 },
       uWarp: { value: 1 }, // CCTV 어안 왜곡 (전체 층 화면에서는 끔)
+      uWarm: { value: 0 }, // 탈출 엔딩의 따뜻한 색감 (0~1)
     };
     const quadMat = (fragmentShader, uniforms) => new THREE.ShaderMaterial({ uniforms, vertexShader: vert, fragmentShader, depthTest: false, depthWrite: false });
     this.finalMat = quadMat(frag, this.uniforms);

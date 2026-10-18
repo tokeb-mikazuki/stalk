@@ -386,7 +386,7 @@ function buildElevator(root, mat, indicatorMat, k) {
     const face = new THREE.Mesh(faceGeo, faceMat);
     face.position.set(0, ring.position.y, 0.0275);
     panel.add(ring, face);
-    buttons.push({ dir, ringMat, faceMat });
+    buttons.push({ dir, ringMat, faceMat, ring, face, z0: ring.position.z, fz0: face.position.z });
   }
   g.add(panel);
   const setCall = (on) => {
@@ -397,11 +397,27 @@ function buildElevator(root, mat, indicatorMat, k) {
     }
   };
 
+  // 버튼을 누르면 쏙 들어갔다가 다시 나온다
+  const PRESS = 0.32;
+  let pressT = 0, pressed = null;
+  const press = () => {
+    pressed = buttons.find((b) => b.dir > 0) || buttons[0];
+    pressT = PRESS;
+  };
+  const tickButtons = (dt) => {
+    if (pressT <= 0 || !pressed) return;
+    pressT = Math.max(0, pressT - dt);
+    const ph = 1 - pressT / PRESS;
+    const depth = (ph < 0.3 ? ph / 0.3 : Math.max(0, 1 - (ph - 0.3) / 0.7)) * 0.007;
+    pressed.ring.position.z = pressed.z0 - depth;
+    pressed.face.position.z = pressed.fz0 - depth;
+  };
+
   g.add(pl, pr, lintel, left, right);
   root.add(g);
   g.updateMatrixWorld(true);
   return {
-    k, group: g, left, right, setCall, open: 0, target: 0,
+    k, group: g, left, right, setCall, press, tickButtons, open: 0, target: 0,
     doorPos: polar(R_OUT - 0.2, DOOR_ANGLE, y + 1.2, new THREE.Vector3()),
     buttonPos: g.localToWorld(new THREE.Vector3(px, 1.2, wallZ + 0.05)),
   };
