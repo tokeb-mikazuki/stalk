@@ -117,12 +117,13 @@
     #touch .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); color: rgba(255,255,255,.75); font: inherit; font-size: 13px; letter-spacing: 1px; touch-action: none; -webkit-tap-highlight-color: transparent; }
     #touch .tbtn.down { background: rgba(255,255,255,.2); }
     #touch .tbtn.active { border-color: var(--accent); color: var(--accent); }
-    #touch [data-touch=use] { right: calc(26px + env(safe-area-inset-right)); bottom: 30px; width: 84px; height: 84px; font-size: 16px; }
-    #touch [data-touch=use].ready { border-color: var(--accent); color: #fff; box-shadow: 0 0 14px rgba(67,255,89,.45); }
-    #touch [data-touch=run] { right: calc(124px + env(safe-area-inset-right)); bottom: 24px; width: 66px; height: 66px; }
-    #touch [data-touch=crouch] { right: calc(120px + env(safe-area-inset-right)); bottom: 104px; width: 58px; height: 58px; }
-    #touch [data-touch=torch] { right: calc(40px + env(safe-area-inset-right)); bottom: 128px; width: 58px; height: 58px; }
-    #touch [data-touch=pause] { right: calc(14px + env(safe-area-inset-right)); top: 12px; width: 44px; height: 44px; border-radius: 8px; font-size: 16px; }
+    #touch .tbtn svg { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    #touch [data-touch=use] { right: calc(22px + env(safe-area-inset-right)); bottom: 26px; width: 60px; height: 60px; }
+    #touch [data-touch=use].ready { border-color: var(--accent); color: #fff; box-shadow: 0 0 12px rgba(67,255,89,.45); }
+    #touch [data-touch=run] { right: calc(94px + env(safe-area-inset-right)); bottom: 22px; width: 50px; height: 50px; }
+    #touch [data-touch=crouch] { right: calc(92px + env(safe-area-inset-right)); bottom: 84px; width: 44px; height: 44px; }
+    #touch [data-touch=torch] { right: calc(30px + env(safe-area-inset-right)); bottom: 98px; width: 44px; height: 44px; }
+    #touch [data-touch=pause] { right: calc(12px + env(safe-area-inset-right)); top: 10px; width: 36px; height: 36px; border-radius: 8px; }
     body.touch #hud { z-index: 6; }
     body.touch #floor { top: 12px; left: calc(16px + env(safe-area-inset-left)); }
     body.touch #floor .num { font-size: 30px; }
@@ -239,7 +240,7 @@
       <div class="keys touch-only" style="margin-bottom:14px">
         <kbd>왼쪽 화면</kbd><span>가상 조이스틱으로 이동 (끝까지 밀면 달리기)</span>
         <kbd>오른쪽 화면</kbd><span>손가락으로 끌어 시점 회전</span>
-        <kbd>버튼</kbd><span>조사(줍기·문 여닫기) · 달리기 · 숙이기 · 손전등 · II 일시정지</span>
+        <kbd>버튼</kbd><span>✋ 조사(줍기·문 여닫기·CCTV) · ⌃⌃ 달리기 · ⌄ 숙이기 · 손전등 · ‖ 일시정지</span>
       </div>
       <div class="keys pc-only">
         <kbd>W A S D</kbd><span>앞 · 왼쪽 · 뒤 · 오른쪽 이동 (보는 방향 기준)</span>
@@ -339,11 +340,11 @@
   <div id="touch">
     <div class="zone-hint">← 왼쪽: 이동 · 오른쪽: 시점 →</div>
     <div class="stick"><div class="knob"></div></div>
-    <button class="tbtn" data-touch="use">조사</button>
-    <button class="tbtn" data-touch="run">달리기</button>
-    <button class="tbtn" data-touch="crouch">숙이기</button>
-    <button class="tbtn" data-touch="torch">손전등</button>
-    <button class="tbtn" data-touch="pause">II</button>
+    <button class="tbtn" data-touch="use" aria-label="조사"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v5.5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v6M17 10a1.5 1.5 0 0 1 3 0v5a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5-2.7L4.7 14.6a1.5 1.5 0 0 1 2.4-1.8L8 14"/></svg></button>
+    <button class="tbtn" data-touch="run" aria-label="달리기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 13l6-6 6 6M6 19l6-6 6 6"/></svg></button>
+    <button class="tbtn" data-touch="crouch" aria-label="숙이기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8l6 6 6-6M5 19h14"/></svg></button>
+    <button class="tbtn" data-touch="torch" aria-label="손전등"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l-1.5 6h-5zM9.5 9h5v11a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1zM12 13v2"/></svg></button>
+    <button class="tbtn" data-touch="pause" aria-label="일시정지"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg></button>
   </div>
   <div class="version">v1.0</div>
 
