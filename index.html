@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>공포의 송신계단</title>
+  <style>
+    :root {
+      --accent: #43ff59;
+      --red: #ff3b3b;
+      --text: #d6d6d0;
+      --sub: #7a7a74;
+      --panel: rgba(12, 12, 12, 0.72);
+      --font: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    body { color: var(--text); font-family: var(--font); user-select: none; -webkit-user-select: none; }
+    #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .6s; }
+    #hud.on { opacity: 1; }
+    #floor { position: absolute; top: 22px; left: 26px; }
+    #floor .num { font-size: 44px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,0,0,.9); }
+    #floor .goal { font-size: 13px; color: var(--sub); letter-spacing: 1px; }
+    #inv { position: absolute; top: 26px; right: 26px; display: flex; gap: 10px; align-items: center; }
+    #inv .key { display: none; padding: 6px 10px; border: 1px solid #b89a4a; color: #e8cf86; font-size: 13px; background: var(--panel); }
+    #inv .key.on { display: block; }
+    #meters { position: absolute; left: 26px; bottom: 26px; width: 220px; }
+    .meter { margin-top: 8px; }
+    .meter .lbl { font-size: 11px; color: var(--sub); letter-spacing: 1px; display: flex; justify-content: space-between; }
+    .meter .bar { height: 5px; background: rgba(255,255,255,.1); margin-top: 3px; }
+    .meter .fill { height: 100%; width: 100%; background: #d8d8d0; transition: width .1s; }
+    #stamina .fill.ex { background: #8a3b3b; }
+    #battery .fill.low { background: var(--red); }
+
+    /* 원작의 synth meter → 송신 감지기 */
+    #detector { position: absolute; right: 26px; bottom: 26px; width: 230px; padding: 10px 12px 8px; background: var(--panel); border: 1px solid #2a2a2a; }
+    #detector .head { display: flex; justify-content: space-between; font-size: 11px; color: var(--sub); letter-spacing: 1px; }
+    #detector .head b { color: var(--accent); font-weight: 600; }
+    #detector.hot .head b { color: var(--red); }
+    #dbars { display: flex; align-items: flex-end; gap: 3px; height: 54px; margin-top: 6px; }
+    #dbars i { flex: 1; height: 3px; background: var(--accent); opacity: .3; }
+    #detector.hot #dbars i { background: var(--red); }
+
+    #cross { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,.55); }
+    #prompt { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); font-size: 16px; padding: 6px 14px; background: var(--panel); border: 1px solid #333; display: none; white-space: nowrap; }
+    #prompt.on { display: block; }
+    #prompt kbd { color: var(--accent); font-family: inherit; font-weight: 700; margin-right: 6px; }
+    #msg { position: absolute; left: 50%; bottom: 17%; transform: translateX(-50%); font-size: 19px; text-align: center; text-shadow: 0 0 8px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; max-width: 80vw; }
+    #msg.on { opacity: 1; }
+    #warn { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); font-size: 64px; font-weight: 900; color: var(--red); letter-spacing: 6px; text-shadow: 0 0 18px var(--red); opacity: 0; }
+    #warn.on { animation: warn 2.2s forwards; }
+    @keyframes warn {
+      0% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); }
+      8% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+      12% { opacity: .2; } 16% { opacity: 1; } 75% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* 쪽지 */
+    #note { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
+    #note.on { display: flex; }
+    #note .paper { width: min(460px, 86vw); padding: 30px 32px 22px; background: #d9d3c1; color: #1d1d22; font-size: 17px; line-height: 1.75; box-shadow: 0 10px 40px #000; transform: rotate(-1.2deg); }
+    #note h3 { font-size: 15px; color: #5a1a1a; margin-bottom: 12px; letter-spacing: 1px; }
+    #note p { white-space: pre-line; }
+    #note .close { margin-top: 18px; font-size: 12px; color: #5b574c; text-align: right; }
+
+    /* ---------- 화면들 ---------- */
+    .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
+    .screen.on { display: flex; }
+    .dim { background: rgba(0,0,0,.6); }
+    h1.title { font-size: clamp(42px, 8vw, 92px); font-weight: 900; letter-spacing: 8px; color: #e9e6dc; text-shadow: 0 0 24px rgba(255,255,255,.15), 3px 0 rgba(255,0,0,.35), -3px 0 rgba(0,255,255,.2); animation: flick 6s infinite; }
+    @keyframes flick { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .3; } 94% { opacity: 1; } 96% { opacity: .5; transform: translateX(3px); } 97% { opacity: 1; transform: none; } }
+    .subtitle { margin-top: 10px; color: var(--sub); letter-spacing: 3px; font-size: 14px; }
+    .menu { margin-top: 42px; display: flex; flex-direction: column; gap: 10px; width: min(300px, 80vw); }
+    .btn { pointer-events: auto; cursor: pointer; padding: 13px 20px; font: inherit; font-size: 17px; letter-spacing: 2px; color: var(--text); background: rgba(0,0,0,.55); border: 1px solid #555; transition: background .15s, border-color .15s, color .15s; }
+    .btn:hover, .btn:focus-visible { background: rgba(67,255,89,.08); border-color: var(--accent); color: #fff; outline: none; }
+    .btn.danger:hover { border-color: var(--red); background: rgba(255,59,59,.1); }
+    .btn small { display: block; font-size: 11px; color: var(--sub); letter-spacing: 1px; margin-top: 3px; }
+    .panel { width: min(520px, 92vw); max-height: 80vh; overflow: auto; background: rgba(8,8,8,.92); border: 1px solid #333; padding: 24px 26px; text-align: left; margin-top: 18px; }
+    .panel h2 { font-size: 18px; letter-spacing: 3px; margin-bottom: 14px; }
+    .keys { display: grid; grid-template-columns: 120px 1fr; gap: 8px 14px; font-size: 14px; }
+    .keys kbd { font-family: inherit; color: var(--accent); }
+    .tips { margin-top: 16px; font-size: 13px; color: #9a9a92; line-height: 1.7; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0; font-size: 14px; }
+    .row input[type=range] { width: 200px; pointer-events: auto; accent-color: var(--accent); }
+    .row select, .row input[type=checkbox] { pointer-events: auto; background: #111; color: var(--text); border: 1px solid #444; padding: 4px 6px; font: inherit; accent-color: var(--accent); }
+    .stats { margin-top: 18px; color: #aaa; font-size: 15px; line-height: 1.9; }
+    #dead h1 { font-size: clamp(40px, 7vw, 80px); color: var(--red); letter-spacing: 6px; text-shadow: 0 0 20px rgba(255,0,0,.6); }
+    #win { background: #f2f2ee; color: #1a1a1a; transition: background 2s; }
+    #win h1 { font-size: clamp(40px, 7vw, 80px); letter-spacing: 10px; }
+    #win .stats { color: #444; }
+    #win .btn { color: #222; background: rgba(255,255,255,.6); border-color: #999; }
+    #win .after { margin-top: 26px; font-size: 14px; color: #7a1010; opacity: 0; transition: opacity 2s; letter-spacing: 2px; }
+    #win .after.on { opacity: 1; }
+    #scare { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; z-index: 50; }
+    #scare.on { display: flex; }
+    #scare img { width: min(90vw, 90vh); filter: grayscale(.85) contrast(1.4) brightness(.9); }
+    #clickhint { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); padding: 12px 20px; background: var(--panel); border: 1px solid #444; display: none; font-size: 15px; }
+    #clickhint.on { display: block; }
+    #mobile { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; padding: 30px; text-align: center; line-height: 1.8; z-index: 100; }
+    #mobile.on { display: flex; }
+    .version { position: fixed; right: 12px; bottom: 8px; font-size: 11px; color: #444; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div id="floor"><div class="num">1F</div><div class="goal">목표: 20F 옥상</div></div>
+    <div id="inv"><div class="key">🗝 옥상 열쇠</div></div>
+    <div id="meters">
+      <div class="meter" id="stamina"><div class="lbl"><span>체력</span><span></span></div><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" id="battery"><div class="lbl"><span>손전등</span><span class="v">100%</span></div><div class="bar"><div class="fill"></div></div></div>
+    </div>
+    <div id="detector">
+      <div class="head"><span>송신 수신기</span><b>신호 없음</b></div>
+      <div id="dbars"></div>
+    </div>
+    <div id="cross"></div>
+    <div id="prompt"></div>
+    <div id="msg"></div>
+    <div id="warn">FOUND YOU</div>
+  </div>
+
+  <div id="note"><div class="paper"><h3></h3><p></p><div class="close">[E] 또는 클릭하여 닫기</div></div></div>
+  <div id="clickhint">화면을 클릭하면 계속합니다</div>
+
+  <section id="title" class="screen on">
+    <h1 class="title">공포의 송신계단</h1>
+    <div class="subtitle">20층 옥상까지 살아서 올라가라</div>
+    <div class="menu">
+      <button class="btn" data-act="start-normal">시작하기<small>보통</small></button>
+      <button class="btn danger" data-act="start-nightmare">악몽 모드<small>더 빠르고, 더 집요하다</small></button>
+      <button class="btn" data-act="howto">조작법 · 생존 수칙</button>
+      <button class="btn" data-act="settings">설정</button>
+    </div>
+  </section>
+
+  <section id="howto" class="screen dim">
+    <div class="panel">
+      <h2>조작법</h2>
+      <div class="keys">
+        <kbd>W A S D</kbd><span>앞 · 왼쪽 · 뒤 · 오른쪽 이동 (보는 방향 기준)</span>
+        <kbd>마우스</kbd><span>시점 회전</span>
+        <kbd>Shift</kbd><span>달리기 (체력 소모)</span>
+        <kbd>C / Ctrl</kbd><span>웅크리기 (조용히 이동)</span>
+        <kbd>F</kbd><span>손전등 켜기/끄기</span>
+        <kbd>E</kbd><span>줍기 · 읽기 · 문 열기</span>
+        <kbd>Esc</kbd><span>일시정지</span>
+      </div>
+      <div class="tips">
+        · 엘리베이터 표시기에 층수가 뜨면 <b>송신</b>은 엘리베이터 안에 있다. <b>Err</b>가 뜨면 계단 어딘가에 있다.<br />
+        · 한 층에 너무 오래 머물면 송신이 찾아온다.<br />
+        · 달리면 발소리가 멀리 퍼지고, 손전등을 켜 두면 멀리서도 눈에 띈다.<br />
+        · 오른쪽 아래 수신기가 지직거릴수록 송신이 가까이 있다.<br />
+        · 지친 상태로 계단을 뛰면 넘어질 수 있다.<br />
+        · 옥상 문은 열쇠로만 열린다.
+      </div>
+      <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
+    </div>
+  </section>
+
+  <section id="settings" class="screen dim">
+    <div class="panel">
+      <h2>설정</h2>
+      <div class="row"><span>마우스 감도</span><input type="range" id="set-sens" min="0.3" max="3" step="0.05" /></div>
+      <div class="row"><span>음량</span><input type="range" id="set-vol" min="0" max="1" step="0.01" /></div>
+      <div class="row"><span>그래픽 품질</span>
+        <select id="set-q"><option value="low">낮음</option><option value="mid">보통</option><option value="high">높음</option></select></div>
+      <div class="row"><span>음성 연출 (브라우저 TTS)</span><input type="checkbox" id="set-voice" /></div>
+      <div class="row"><span>마우스 Y축 반전</span><input type="checkbox" id="set-invert" /></div>
+      <div class="menu"><button class="btn" data-act="back">돌아가기</button></div>
+    </div>
+  </section>
+
+  <section id="pause" class="screen dim">
+    <h1 class="title" style="font-size:48px">일시정지</h1>
+    <div class="menu">
+      <button class="btn" data-act="resume">계속하기</button>
+      <button class="btn" data-act="howto">조작법</button>
+      <button class="btn" data-act="settings">설정</button>
+      <button class="btn danger" data-act="quit">타이틀로</button>
+    </div>
+  </section>
+
+  <section id="dead" class="screen dim">
+    <h1>송신에게 잡혔다</h1>
+    <div class="stats"></div>
+    <div class="menu">
+      <button class="btn" data-act="retry">다시 하기</button>
+      <button class="btn" data-act="quit">타이틀로</button>
+    </div>
+  </section>
+
+  <section id="win" class="screen">
+    <h1>탈 출</h1>
+    <div class="stats"></div>
+    <div class="menu">
+      <button class="btn" data-act="retry">다시 하기</button>
+      <button class="btn" data-act="quit">타이틀로</button>
+    </div>
+    <div class="after">…송신은 아직 계단에 있다.</div>
+  </section>
+
+  <div id="scare"><img alt="" /></div>
+  <div id="mobile">이 게임은 PC(키보드 + 마우스) 전용입니다.<br />데스크톱 브라우저에서 실행해 주세요.</div>
+  <div class="version">v1.0</div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

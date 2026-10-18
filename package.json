@@ -1,0 +1,17 @@
+{
+  "name": "songsin-stairs",
+  "version": "1.0.0",
+  "description": "공포의 송신계단 - 3D 1인칭 추격형 공포 게임",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/build.mjs --serve",
+    "build": "node tools/build.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2"
+  }
+}

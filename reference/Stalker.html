@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Stalker Survival</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #111;
+      --panel-grad: linear-gradient(145deg,#1d1d1d,#141414);
+      --accent: #43ff59;
+      --found: #ff3b3b;
+      --win: #3498db;
+      --off: #333;
+      --text: #d8d8d8;
+      --sub: #777;
+      --bar-gray: #555;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+    body {
+      background: var(--bg) url('https://i.imgur.com/T4D1dyt.png') repeat;
+      color: var(--text);
+      font-family: 'Barlow Condensed',sans-serif;
+      overflow: hidden;
+      padding-bottom: 100px;
+    }
+    /* Top panels container */
+    #top-panels { display:flex; width:100%; }
+    /* Status panel (left) */
+    #status {
+      width:260px;
+      background:var(--panel-grad);
+      padding:16px;
+      border-right:2px solid var(--sub);
+      text-align:center;
+    }
+    #status h2 {
+      color:var(--accent);
+      text-shadow:0 0 6px var(--accent);
+      margin-bottom:12px;
+    }
+    #status .item {
+      margin-bottom:12px;
+    }
+    #status .label {
+      font-size:13px;
+      color:var(--sub);
+    }
+    #player-status, #stalker-status {
+      font-size:20px;
+      text-shadow:0 0 4px var(--accent);
+      transition:color .2s, text-shadow .2s;
+    }
+    #player-status.win {
+      color:var(--win)!important;
+      text-shadow:0 0 6px var(--win)!important;
+    }
+    #player-status.found, #stalker-status.found {
+      color:var(--found)!important;
+      text-shadow:0 0 6px var(--found)!important;
+    }
+    /* Elevator panel (right) */
+    #elevator-panel {
+      flex:1;
+      background:var(--panel-grad);
+      padding:24px 16px;
+      text-align:center;
+      position:relative;
+    }
+    #elevator-indicator.glitch .elevator-floor,
+    #elevator-indicator.glitch .arrow {
+      opacity:.3;
+    }
+    .arrows {
+      display:flex;
+      justify-content:center;
+      gap:16px;
+    }
+    .arrow {
+      font-size:36px;
+      color:var(--accent);
+      transition:color .2s;
+    }
+    .arrow.off {
+      color:var(--off);
+    }
+    .elevator-floor {
+      font-size:56px;
+      margin-top:12px;
+      color:var(--accent);
+      text-shadow:0 0 8px var(--accent);
+      transition:color .2s, text-shadow .2s;
+    }
+    .elevator-floor.off {
+      color:var(--off);
+      text-shadow:none;
+    }
+    /* Synthesizer meter */
+    #synth-meter {
+      display:flex;
+      align-items:flex-end;
+      height:150px;
+      background:#111;
+      padding:0 16px;
+      gap:4px;
+    }
+    .bar {
+      flex:1;
+      background:var(--accent);
+      height:4px;
+      transition:height .05s, opacity .05s;
+    }
+    /* Footer controls */
+    #controls {
+      position:fixed;
+      bottom:0; left:0; width:100%;
+      background:var(--panel-grad);
+      border-top:2px solid var(--sub);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      z-index:10;
+    }
+    #progress-container {
+      width:100%; height:8px;
+      background:#222;
+    }
+    #progress-bar {
+      width:0;
+      height:100%;
+      background:var(--accent);
+      transition:width .1s;
+    }
+    #progress-bar.tripped {
+      background:var(--bar-gray);
+    }
+    #btn {
+      margin:8px 0 10px;
+      padding:12px 24px;
+      font-size:20px;
+      color:var(--accent);
+      background:transparent;
+      border:2px solid var(--accent);
+      cursor:pointer;
+      transition:background .2s, transform .1s;
+    }
+    #btn:active:not(:disabled) {
+      background:rgba(67,255,89,.2);
+      transform:scale(.98);
+    }
+    #btn:disabled {
+      opacity:.5;
+      cursor:default;
+    }
+    /* Screen FX */
+    .shake-slight { animation:shake .45s infinite; }
+    .shake-strong { animation:shake .12s infinite; }
+    .red-alert::after {
+      content:"";
+      position:absolute; top:0; left:0;
+      width:100%; height:100%;
+      background:rgba(255,0,0,.17);
+      pointer-events:none;
+    }
+    @keyframes shake {
+      0%{transform:translate(0,0)}
+      25%{transform:translate(2px,-2px)}
+      50%{transform:translate(-2px,2px)}
+      75%{transform:translate(2px,2px)}
+      100%{transform:translate(-2px,-2px)}
+    }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <div id="top-panels">
+      <div id="status">
+        <h2>STATUS</h2>
+        <div class="item">
+          <div class="label">Current Floor</div>
+          <div id="player-status">—</div>
+        </div>
+        <div class="item">
+          <div class="label">Stalker Status</div>
+          <div id="stalker-status">—</div>
+        </div>
+      </div>
+      <div id="elevator-panel">
+        <div id="elevator-indicator">
+          <div class="arrows">
+            <div id="arrow-up" class="arrow">▲</div>
+            <div id="arrow-down" class="arrow">▼</div>
+          </div>
+          <div id="elevator-floor" class="elevator-floor">--</div>
+        </div>
+      </div>
+    </div>
+    <div id="synth-meter">
+      <!-- 20 bars -->
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div id="progress-container"><div id="progress-bar"></div></div>
+    <button id="btn">HOLD TO MOVE</button>
+  </div>
+
+  <script>
+    const MAX_F = 20, T_F = 15000, E_T = 2500, S_T = 7500, HIDE_THRESH = 45000;
+    const $ = id => document.getElementById(id);
+    const pSt = $('player-status'), sSt = $('stalker-status'),
+          up = $('arrow-up'), dn = $('arrow-down'),
+          fl = $('elevator-floor'), prog = $('progress-bar'),
+          game = $('game'), bars = document.querySelectorAll('#synth-meter .bar'),
+          btn = $('btn'), ei = $('elevator-indicator');
+
+    let player = { f:1, p:0, dir:0 },
+        prevReached = 1,
+        stalker = { f: randF(), seg: null },
+        lastTime, floorTimer, caughtHide = false,
+        climbStart = null, tripped = false, tripStart = 0,
+        glitch = false, glitchStart = 0, glitchDur = 5000;
+
+    // debug mode counter
+    let debugCount = 0;
+
+    // Pause/Break 5x to enter debug jump
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Pause' || e.key === 'PauseBreak') {
+        debugCount++;
+        if (debugCount >= 5) {
+          debugCount = 0;
+          const input = prompt('Debug: 이동할 층 입력 (1~20)', player.f);
+          const n = parseInt(input);
+          if (!isNaN(n)) {
+            const target = Math.max(1, Math.min(MAX_F, n));
+            player.f = target;
+            player.p = 0;
+            prevReached = target;
+            floorTimer = performance.now();
+            caughtHide = false;
+            btn.textContent = 'HOLD TO MOVE';
+            btn.disabled = false;
+            sSt.classList.remove('found');
+          }
+        }
+      } else {
+        debugCount = 0;
+      }
+    });
+
+    function randF() {
+      return Math.floor(Math.random() * MAX_F) + 1;
+    }
+    function pick(s) {
+      let t;
+      do { t = randF(); } while (t === s);
+      return t;
+    }
+    function getSPos(now) {
+      const g = stalker.seg, e = now - g.start;
+      return e < g.tot
+        ? g.s + (g.d - g.s) * (e / g.tot)
+        : g.d;
+    }
+    function startSeg(mode) {
+      const s = stalker.f,
+            d = pick(s),
+            per = (mode === 'elevator' ? E_T : S_T);
+      stalker.seg = { mode, s, d, tot: Math.abs(d - s) * per, start: performance.now(), hide: false };
+      // 30% chance to glitch for 5s on each elevator segment start
+      if (mode === 'elevator' && Math.random() < 0.3) {
+        glitch = true;
+        glitchStart = performance.now();
+        ei.classList.add('glitch');
+      }
+    }
+    startSeg('elevator');
+
+    btn.onpointerdown = () => {
+      if (!floorTimer) floorTimer = performance.now();
+      // begin climbing
+      if (player.dir === 0 && player.f >= 5) climbStart = performance.now();
+      player.dir = 1;
+    };
+    btn.onpointerup = btn.onpointerleave = () => {
+      player.dir = 0;
+      climbStart = null;
+    };
+
+    function screenFX(dist) {
+      game.className = '';
+      if (dist < 1)      game.classList.add('shake-strong', 'red-alert');
+      else if (dist < 2) game.classList.add('shake-strong');
+      else if (dist < 3) game.classList.add('shake-slight');
+    }
+    function updateSynth(dist) {
+      const f = Math.max(0, (8 - dist) / 8);
+      bars.forEach((b, i) => {
+        const noise = Math.random(),
+              factor = (i + 1) / bars.length,
+              amp = 0.05 + f * 1.2,
+              h = 4 + noise * amp * 150 * factor;
+        b.style.height = `${h}px`;
+        b.style.opacity = 0.3 + 0.7 * f;
+      });
+    }
+
+    requestAnimationFrame(loop);
+    function loop(ts) {
+      if (!lastTime) { lastTime = ts; floorTimer = ts; }
+      const dt = ts - lastTime; lastTime = ts;
+
+      // clear glitch after duration
+      if (glitch && ts - glitchStart > glitchDur) {
+        glitch = false;
+        ei.classList.remove('glitch');
+      }
+      // trip logic: 10s into climb, 20% chance
+      if (climbStart && !tripped && ts - climbStart > 10000) {
+        if (Math.random() < 0.2) {
+          tripped = true;
+          tripStart = ts;
+          prog.classList.add('tripped');
+        }
+        climbStart = null;
+      }
+      // end trip after 5s
+      if (tripped && ts - tripStart > 5000) {
+        tripped = false;
+        prog.classList.remove('tripped');
+      }
+
+      // player move & slow‐climb
+      if (player.dir && !tripped) {
+        player.p += dt / T_F;
+        if (!caughtHide && player.f >= 2 && ts - floorTimer > HIDE_THRESH) {
+          caughtHide = true;
+          btn.textContent = 'RUN';
+          const sp = Math.floor(getSPos(ts));
+          stalker.seg = {
+            mode: 'stairs',
+            s: sp,
+            d: prevReached,
+            tot: Math.abs(prevReached - sp) * (S_T / 2.5),
+            start: performance.now(),
+            hide: true
+          };
+          sSt.textContent = 'FOUND YOU';
+          sSt.classList.add('found');
+        }
+        if (player.p >= 1) {
+          player.p = 0;
+          player.f = Math.min(MAX_F, player.f + 1);
+          prevReached = player.f;
+          floorTimer = ts;
+          climbStart = null;
+          if (caughtHide) {
+            caughtHide = false;
+            btn.textContent = 'HOLD TO MOVE';
+            startSeg('elevator');
+            sSt.classList.remove('found');
+          }
+          if (player.f === MAX_F) {
+            pSt.textContent = 'YOU WIN';
+            pSt.classList.add('win');
+            btn.disabled = true;
+            return;
+          }
+        }
+      } else if (player.p > 0) {
+        player.p = Math.max(0, player.p - dt / T_F);
+      }
+      // p locked during trip
+      prog.style.width = `${player.p * 100}%`;
+
+      // stalker move
+      const seg = stalker.seg;
+      const e = ts - seg.start;
+      let sPos;
+      if (e < seg.tot) {
+        sPos = seg.s + (seg.d - seg.s) * (e / seg.tot);
+      } else {
+        stalker.f = seg.d;
+        startSeg(seg.mode === 'elevator' ? 'stairs' : 'elevator');
+        sPos = stalker.f;
+      }
+
+      // UI update
+      pSt.textContent = player.dir ? `${player.f}→${player.f+1}` : `${player.f}`;
+      up.classList.remove('off');
+      dn.classList.remove('off');
+      fl.classList.remove('off');
+
+      if (seg.mode === 'elevator' && !seg.hide) {
+        sSt.textContent = 'On Elevator';
+        fl.textContent = glitch
+          ? Math.floor(Math.random() * MAX_F + 1)
+          : Math.floor(sPos);
+        if (seg.d > seg.s) dn.classList.add('off');
+        else up.classList.add('off');
+      } else {
+        if (!caughtHide) {
+          sSt.textContent = 'Using Stairs';
+          sSt.classList.remove('found');
+        }
+        fl.textContent = 'Err';
+        up.classList.add('off');
+        dn.classList.add('off');
+        fl.classList.add('off');
+      }
+
+      // FX & synth
+      const dist = Math.abs((player.f + player.p) - sPos);
+      screenFX(dist);
+      updateSynth(dist);
+
+      // collision → game over
+      if (dist < 0.001 &&
+         ((seg.mode==='stairs' && !caughtHide && player.dir) || caughtHide)) {
+        pSt.textContent = 'STALKER CAUGHT YOU';
+        sSt.textContent = 'STALKER CAUGHT YOU';
+        pSt.classList.add('found');
+        sSt.classList.add('found');
+        btn.disabled = true;
+        return;
+      }
+
+      requestAnimationFrame(loop);
+    }
+  </script>
+</body>
+</html>
+```
