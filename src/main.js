@@ -110,7 +110,7 @@ class Game {
 
     this.touch = new TouchControls(this);
     this.touch.enable(this.isTouch);
-    this.hud.keyLabel = this.isTouch ? '조사' : 'E';
+    this.hud.keyLabel = this.isTouch ? '조사' : 'E / 클릭';
     // 노트북 등에서 처음 터치하면 터치 조작 켜기
     window.addEventListener('touchstart', () => {
       if (this.touch.enabled) return;
@@ -248,10 +248,14 @@ class Game {
       const sens = 0.0022 * this.settings.sens;
       this.player.look(mx, my * (this.settings.invert ? -1 : 1), sens);
     });
-    // 마우스 좌클릭 = 손전등 켜기/끄기 (마우스가 잠긴 상태에서)
+    // 마우스 좌클릭: 문·CCTV 모니터·물건을 보고 있으면 그것을 사용, 아니면 손전등 켜기/끄기
     document.addEventListener('mousedown', (e) => {
       if (e.button !== 0 || this.state !== 'playing' || this.cctv || this.hud.noteOpen) return;
       if (document.pointerLockElement !== canvas) return;
+      if (this.findInteractable()) {
+        this.interact();
+        return;
+      }
       if (this.player.toggleTorch()) this.audio.torchClick();
       else this.hud.msg('배터리 없음', 1.8);
     });
