@@ -142,11 +142,52 @@
   const meshYawTo = (fx, fz, tx, tz) => Math.atan2(tx - fx, tz - fz); // 송신 평면 기준
   const firstOpenRoom = (min) => g.world.fireDoors.find((d) => !d.locked && d.k >= min) || g.world.fireDoors.find((d) => !d.locked);
 
+  /** 검은 화면 자막 카드 (막과 막 사이) */
+  const card = (name, dur, text) => ({
+    name, dur,
+    setup() { mark(name); },
+    tick(lt) {
+      black(1);
+      caption(lt, [{ t0: 0.15, t1: dur - 0.05, text, big: true }]);
+    },
+  });
+  /** 송신 얼굴이 화면을 덮치는 짧은 섬광 컷 */
+  function faceFlash(k) {
+    resetAll();
+    const phi = FLOOR_PHI * k + 0.6;
+    place(phi, R_MID, uphillYaw(phi) - 0.3, 0.05);
+    p.torchOn = true;
+    s.state = 'chase';
+    s.visible = true;
+    scriptStalker(() => {
+      const w = { x: p.x - Math.sin(p.yaw) * 1.25, z: p.z - Math.cos(p.yaw) * 1.25 };
+      s.phi = p.phi + Math.atan2(w.z, w.x) - Math.atan2(p.z, p.x);
+      s.r = Math.hypot(w.x, w.z);
+      s.yaw = meshYawTo(w.x, w.z, p.x, p.z);
+      s.visible = true;
+    });
+  }
+
   // ---------------------------------------------------------------- 샷 목록
+  // 기(도입·세계) → 승(송신 등장) → 전(숨기·감시) → 결/클라이맥스(추격·엘리베이터) → 로고
   const shots = [
+    // 0. 콜드 오프닝: 정적 속에서 한 순간 그것의 얼굴
+    {
+      name: 'coldopen', dur: 1.7,
+      setup() { faceFlash(9); },
+      tick(lt) {
+        const on = lt > 0.55 && lt < 0.82;
+        black(on ? 0 : 1);
+        if (on) {
+          mark('coldflash');
+          g.glitchPulse(0.9);
+          p.shake = 1;
+        }
+      },
+    },
     // 1. 올려다본 나선 계단 — 멀리서 무언가 내려온다
     {
-      name: 'title', dur: 5.4,
+      name: 'title', dur: 5.0,
       setup() {
         resetAll();
         g.state = 'title';
@@ -155,15 +196,15 @@
       },
       tick(lt) {
         u.uFade.value = Math.max(0, 1 - lt / 2.2) + DT * 0.5;
-        caption(lt, [{ t0: 1.0, t1: 4.9, text: '자정이 지난 아파트, 비상계단.' }]);
+        caption(lt, [{ t0: 1.0, t1: 4.6, text: '자정이 지난 아파트, 비상계단.' }]);
       },
     },
     // 2. 손전등을 들고 계단을 오른다
     {
-      name: 'climb', dur: 5.0,
+      name: 'climb', dur: 4.6,
       setup() {
         resetAll();
-        place(FLOOR_PHI * 2 + 1.9, R_MID - 0.25, uphillYaw(FLOOR_PHI * 2 + 1.9) + 0.4, 0.1);
+        place(FLOOR_PHI * 2 + 1.9, R_MID - 0.25, uphillYaw(FLOOR_PHI * 2 + 1.9) - 0.55, 0.1);
         p.torchOn = true;
         g.input.f = true;
       },
@@ -171,14 +212,14 @@
         black(1 - lt / 0.3);
         // 앞쪽(오르막) 보다 약간 안쪽 — 난간과 위층 계단이 보이게. 너무 바깥으로 붙으면 안쪽으로 되돌린다
         if (p.r > R_MID + 0.2) p.r -= 0.02;
-        p.yaw = uphillYaw(p.phi) + 0.42 + 0.12 * Math.sin(lt * 0.7);
+        p.yaw = uphillYaw(p.phi) - 0.55 + 0.1 * Math.sin(lt * 0.7); // 오른쪽(나선 안쪽)으로 — 난간과 위로 감기는 계단
         p.pitch = 0.2 + 0.06 * Math.sin(lt * 0.5);
-        caption(lt, [{ t0: 0.5, t1: 4.6, text: '출구는 단 하나. 꼭대기의 옥상 문.' }]);
+        caption(lt, [{ t0: 0.4, t1: 4.3, text: '출구는 단 하나. 꼭대기의 옥상 문.' }]);
       },
     },
     // 3. 난간 너머 위를 올려다본다 — 끝없는 나선
     {
-      name: 'well', dur: 4.2,
+      name: 'well', dur: 3.6,
       setup() {
         resetAll();
         const phi = FLOOR_PHI * 1 + 0.55;
@@ -189,7 +230,7 @@
         const phi = p.phi;
         p.yaw = Math.atan2(Math.cos(phi), Math.sin(phi)) - 0.15 + lt * 0.05;
         p.pitch = Math.min(1.4, 0.95 + lt * 0.09);
-        caption(lt, [{ t0: 0.6, t1: 3.9, text: '그리고 이 계단에는—' }]);
+        caption(lt, [{ t0: 0.5, t1: 3.5, text: '그리고 이 계단에는—' }]);
       },
     },
     // 4. 엘리베이터가 내려와 열린다. 밝은 칸 안에 그것이 서 있다
@@ -291,9 +332,10 @@
         if (lt > 5.0) black((lt - 5.0) / 0.2);
       },
     },
+    card('card1', 1.9, '숨을 곳은, 절반뿐.'),
     // 6. 비상실에 숨어 CCTV로 문 앞을 본다. 그것이 쓱 다가온다
     {
-      name: 'cctv', dur: 4.6,
+      name: 'cctv', dur: 4.4,
       setup() {
         resetAll();
         const d = firstOpenRoom(4);
@@ -328,9 +370,9 @@
     },
     // 7. 전 층 CCTV — MOTION
     {
-      name: 'grid', dur: 2.8,
+      name: 'grid', dur: 2.6,
       setup() {
-        const d = shots[5].door;
+        const d = shots.find((x) => x.name === 'cctv').door;
         g.cctvToggle();
         this.door = d;
       },
@@ -339,10 +381,11 @@
           this.r2 = true;
           g.onDoorRattle(this.door.k);
         }
-        caption(lt, [{ t0: 0.3, t1: 2.6, text: '그것도, 당신을 찾고 있다.' }]);
-        if (lt > 2.6) black((lt - 2.6) / 0.2);
+        caption(lt, [{ t0: 0.25, t1: 2.45, text: '그것도, 당신을 찾고 있다.' }]);
+        if (lt > 2.45) black((lt - 2.45) / 0.15);
       },
     },
+    card('card2', 1.3, '도망쳐.'),
     // 8. 추격 — 달리고, 돌아보고, 넘어진다
     {
       name: 'chase', dur: 6.6,
@@ -372,7 +415,7 @@
       },
       tick(lt) {
         black(1 - lt / 0.15);
-        const fwd = uphillYaw(p.phi) + 0.35; // 바깥벽 대신 위로 이어지는 계단 쪽
+        const fwd = uphillYaw(p.phi) - 0.4; // 바깥벽 대신 위로 감기는 계단 쪽 (오른쪽이 나선 안쪽)
         // 2.2~3.7초: 뒤를 돌아본다 (뒷걸음질)
         let look = 0;
         if (lt > 2.2 && lt < 3.7) look = Math.min(1, (lt - 2.2) / 0.3) * Math.min(1, (3.7 - lt) / 0.25);
@@ -386,6 +429,7 @@
         g.input.b = look >= 0.5;
         g.input.sprint = look < 0.5;
         if (lt > 2.4 && lt < 2.5) g.glitchPulse(0.5);
+        if (Math.floor(lt * 2.6) !== Math.floor((lt - DT) * 2.6)) g.glitchPulse(0.25); // 박자에 맞춘 잔떨림
         if (lt > 5.3 && !this.tripped) {
           this.tripped = true;
           p.stamina = 0;
@@ -393,9 +437,15 @@
           g.audio.fall();
           g.glitchPulse(0.6);
         }
-        if (lt > 6.35) black((lt - 6.35) / 0.15);
       },
     },
+    // 섬광 컷: 넘어진 직후 눈앞의 얼굴
+    {
+      name: 'flash', dur: 0.45,
+      setup() { faceFlash(11); mark('flash'); },
+      tick() { g.glitchPulse(1); p.shake = 1; },
+    },
+    card('card3', 1.0, ''),
     // 9. 엘리베이터에 탔다 — 문이 열리면
     {
       name: 'trap', dur: 9,

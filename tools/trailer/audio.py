@@ -266,13 +266,35 @@ def main():
     # 바탕 드론: 샷마다 세기 조절
     dr = drone(dur + 0.5)
     level = np.zeros_like(dr)
-    lv = {'title': 0.5, 'climb': 0.6, 'well': 0.85, 'elevator': 0.5, 'descend': 0.35, 'cctv': 0.6, 'grid': 0.8, 'chase': 1.1, 'trap': 0.45, 'logo': 0.9}
+    lv = {'coldopen': 0.0, 'title': 0.5, 'climb': 0.6, 'well': 0.85, 'elevator': 0.5, 'descend': 0.35, 'card1': 0.45,
+          'cctv': 0.6, 'grid': 0.8, 'card2': 0.9, 'chase': 1.1, 'flash': 1.0, 'card3': 0.0, 'trap': 0.35, 'logo': 0.9}
     for n in order:
         a, b = int(shots[n] * SR), int(ends[n] * SR)
         level[a:b] = lv.get(n, 0.5)
     k = np.ones(int(0.4 * SR)) / int(0.4 * SR)
     level = fftconvolve(level, k, mode='same')
     m.add(0, dr * level, 0.32, rev=0.3)
+
+    # 콜드 오프닝: 잡음 → 한 순간의 얼굴 → 정적
+    if 'coldflash' in marks:
+        cf = marks['coldflash']
+        m.add(0, static(cf), 0.5, rev=0.05)
+        m.add(cf - 0.01, sting(1.8), 0.7, rev=0.4)
+        m.add(cf - 0.01, boom(3.0, 48), 0.8, rev=0.5)
+        m.add(cf, glitch(0.3), 0.8)
+    # 막 사이 카드: 초침 · 숨
+    if 'card1' in shots:
+        c1 = shots['card1']
+        for i in range(4):
+            m.add(c1 + 0.1 + i * 0.45, click(), 0.6, pan=(-0.3 if i % 2 else 0.3), rev=0.3)
+        m.add(c1 + 0.05, heartbeat(60), 1.0, rev=0.1)
+    if 'card2' in shots:
+        m.add(shots['card2'] + 0.2, bp(noise(0.9), 300, 2500) * env_exp(0.9, 0.4, 0.3), 0.25, rev=0.2)  # 숨 들이켬
+        m.add(shots['chase'] - 0.02, boom(3.0, 52), 0.9, rev=0.4)
+    if 'flash' in marks:
+        m.add(marks['flash'] - 0.01, sting(1.6), 0.8, rev=0.3)
+        m.add(marks['flash'] - 0.01, boom(2.0, 40), 0.7, rev=0.3)
+        m.add(marks['flash'], glitch(0.4), 0.9)
 
     # 오르골 모티프 (도입부 · 로고)
     motif = [659.3, 493.9, 523.3, 440.0, 392.0, 440.0, 329.6]
@@ -327,18 +349,17 @@ def main():
     m.add(shots['cctv'], static(ends['grid'] - shots['cctv']), 0.3, rev=0.05)
     m.add(shots['cctv'], glitch(0.3), 0.5)
     m.add(shots['grid'], glitch(0.3), 0.6)
-    m.add(shots['chase'] - 2.0, riser(2.0), 0.35, rev=0.3)
-    # 추격: 타악 (150bpm)
+    m.add(shots['chase'] - 2.6, riser(2.6), 0.45, rev=0.3)
+    # 추격: 타악 (150 → 176bpm 으로 빨라짐)
     tt = shots['chase']
-    beat = 60 / 150
     i = 0
     while tt < ends['chase'] - 0.1:
+        beat = 60 / (150 + 26 * (tt - shots['chase']) / max(0.1, ends['chase'] - shots['chase']))
         m.add(tt, taiko(), 0.55 if i % 4 == 0 else 0.38, pan=(0.25 if i % 2 else -0.25), rev=0.25)
         if i % 2 == 1:
             m.add(tt + beat / 2, taiko(), 0.22, rev=0.2)
         tt += beat
         i += 1
-    m.add(ends['chase'] - 0.05, boom(2.5, 45), 0.6, rev=0.4)
     # 엘리베이터 함정: 탑승 → 운행 소음 → 정적 → 점프스케어
     if 'ride' in marks:
         reveal = marks.get('reveal', marks['ride'] + 3)
