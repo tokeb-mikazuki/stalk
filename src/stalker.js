@@ -8,13 +8,16 @@
 // 문을 닫고 비상실에 숨거나 엘리베이터 안에 있으면 아무것도 느끼지 못한다. 눈으로 보면(detect) 그때부터 추격.
 // 난이도가 오를수록 더 멀리서 듣고, 오차가 적고, 오래 기억하고, 플레이어가 갈 곳을 앞질러 간다 (config.js 의 ai).
 import * as THREE from 'three';
+import { YUGI } from './theme.js';
+import { silhouetteTexture } from './textures.js';
 import {
   FLOORS, FLOOR_H, FLOOR_PHI, R_MID, R_OUT, DOOR_ANGLE, PHI_MIN, PHI_MAX, CORR_L,
   baseY, floorIndex, landingCenter, fireDoorPhi, pathDist, polar,
   toRoomLocal, fromRoomLocal,
 } from './config.js';
 
-const RADIUS = 0.62; // 피구공 반지름(m)
+const RADIUS = 0.62; // 피구공 반지름(m) — 채널유기 판
+const HEIGHT = 1.9;   // 송신의 키(m) — 송신계단 판
 const DOOR_FRONT_R = R_OUT - 0.45;
 
 /** 대략 정규분포 (-2.1 ~ 2.1) */
@@ -30,24 +33,48 @@ function wrapPi(a) {
 
 export class Stalker {
   constructor(scene, texture) {
-    // 피구공: 하얀 공 앞면에 그림(원형으로 깎은 얼굴)이 있다. 어둠 속에서도 희미하게 보이도록 약간 스스로 빛난다
-    this.radius = RADIUS;
-    const geo = new THREE.SphereGeometry(RADIUS, 48, 32);
-    this.faceMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.62, metalness: 0, emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: 0.16, fog: true });
-    this.faceMat.color.setScalar(0.8);
-    const ball = new THREE.Mesh(geo, this.faceMat);
-    this.ball = ball;
-    this.body = new THREE.Group();   // 튀어 오름/찌그러짐/기울기
-    this.body.add(ball);
+    this.body = new THREE.Group();   // 흔들림/기울기 (피구공: 튀어 오름·찌그러짐)
     this.group = new THREE.Group();  // 위치/방향
     this.group.add(this.body);
     this.group.renderOrder = 2;
+    if (YUGI) {
+      // 피구공: 하얀 공 앞면에 그림(원형으로 깎은 얼굴)이 있다. 어둠 속에서도 희미하게 보이도록 약간 스스로 빛난다
+      this.radius = RADIUS;
+      const geo = new THREE.SphereGeometry(RADIUS, 48, 32);
+      this.faceMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.62, metalness: 0, emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: 0.16, fog: true });
+      this.faceMat.color.setScalar(0.8);
+      this.darkMat = new THREE.MeshBasicMaterial({ color: 0x050505, fog: true }); // 실루엣(트레일러 등)
+      this.ball = new THREE.Mesh(geo, this.faceMat);
+      this.body.add(this.ball);
+    } else {
+      // 송신: 앞은 얼굴 사진, 뒤는 검은 실루엣인 판 한 장
+      this.radius = 0;
+      const img = texture.image;
+      const aspect = img ? img.width / img.height : 1;
+      this.width = HEIGHT * aspect;
+      const geo = new THREE.PlaneGeometry(this.width, HEIGHT);
+      this.faceMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.04, fog: true });
+      this.faceMat.color.setScalar(0.8);
+      this.backMat = new THREE.MeshBasicMaterial({ map: silhouetteTexture(img), transparent: true, alphaTest: 0.04, fog: true });
+      this.front = new THREE.Mesh(geo, this.faceMat);
+      const back = new THREE.Mesh(geo, this.backMat);
+      back.rotation.y = Math.PI;
+      this.front.position.z = 0.004;
+      back.position.z = -0.004;
+      this.body.add(this.front, back);
+    }
     scene.add(this.group);
 
     this.pos = new THREE.Vector3();
     this.humPos = new THREE.Vector3();
     this.tmp = {};
     this.reset();
+  }
+
+  /** 얼굴을 숨긴 검은 실루엣으로 (on) / 원래대로 */
+  setSilhouette(on) {
+    if (YUGI) this.ball.material = on ? this.darkMat : this.faceMat;
+    else this.front.material = on ? this.backMat : this.faceMat;
   }
 
   reset(diff) {
@@ -855,12 +882,17 @@ export class Stalker {
   updateMesh(dt) {
     const w = this.worldXZ();
     this.footY = this.roomK >= 0 ? this.roomK * FLOOR_H : baseY(this.phi);
-    // 통통 튀며 온다: 쫓을 때는 높고 빠르게
-    const hopF = this.chasing ? 6.5 : 3.6;
-    const ph = Math.abs(Math.sin(this.t * hopF));
-    const hop = ph * (this.chasing ? 0.42 : 0.16);
-    this.pos.set(w.x, this.footY + RADIUS + 0.02 + hop, w.z);
-    this.hopPh = ph;
+    if (YUGI) {
+      // 통통 튀며 온다: 쫓을 때는 높고 빠르게
+      const hopF = this.chasing ? 6.5 : 3.6;
+      const ph = Math.abs(Math.sin(this.t * hopF));
+      const hop = ph * (this.chasing ? 0.42 : 0.16);
+      this.pos.set(w.x, this.footY + RADIUS + 0.02 + hop, w.z);
+      this.hopPh = ph;
+    } else {
+      const bob = Math.abs(Math.sin(this.t * (this.chasing ? 9 : 4.2))) * (this.chasing ? 0.08 : 0.04);
+      this.pos.set(w.x, this.footY + HEIGHT * 0.5 + 0.12 + bob, w.z);
+    }
     // 엘리베이터 승강로 위치 (모터 소리용)
     const carFloor = this.game ? this.game.elevator.floor : this.elevFloor;
     polar(R_OUT + 0.9, DOOR_ANGLE, carFloor * FLOOR_H + 1.2, this.humPos);
@@ -881,6 +913,13 @@ export class Stalker {
     }
     const b = this.body;
     b.position.set(this.jx || 0, this.jy || 0, 0);
+    if (!YUGI) {
+      b.scale.setScalar(this.js || 1);
+      // 걸음에 맞춰 좌우로 기우뚱
+      b.rotation.z = Math.sin(this.t * (this.chasing ? 9 : 4.2)) * (this.chasing ? 0.08 : 0.05);
+      b.rotation.x = this.chasing ? -0.12 : 0;
+      return;
+    }
     // 바닥에 닿는 순간 납작하게 찌그러졌다가 튀어 오른다
     const squash = Math.max(0, 1 - this.hopPh * 5) * (this.chasing ? 0.16 : 0.08);
     const sc = this.js || 1;

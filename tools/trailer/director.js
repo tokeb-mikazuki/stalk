@@ -1,8 +1,9 @@
 // 트레일러 촬영용 연출 스크립트 — 빌드된 게임 페이지 안에서 실행된다 (record.cjs 가 주입)
-// 게임 루프를 멈추고 고정 dt 로 한 프레임씩 진행하며, 장면(샷)마다 플레이어·송신·카메라를 연출한다.
+// 게임 루프를 멈추고 고정 dt 로 한 프레임씩 진행하며, 장면(샷)마다 플레이어·피구공·카메라를 연출한다.
 // window.TR.step() 을 부를 때마다 1프레임 진행 (window.TR_FPS, 기본 30fps). 소리는 나중에 합성하므로 사운드 호출 시각만 기록한다.
 (() => {
   const g = window.__songsin;
+  const YUGI = window.__theme === 'yugi'; // 어느 판을 찍는지 (TR_THEME)
   const FPS = window.TR_FPS || 30, DT = 1 / FPS;
   const FLOOR_PHI = Math.PI * 4, R_IN = 2.0, R_OUT = 4.9, R_MID = (R_IN + R_OUT) / 2;
   const DOOR_ANGLE = 0.68, FIREDOOR_ANGLE = 0.2;
@@ -24,9 +25,8 @@
   const origUpdateMesh = s.updateMesh;
   const origUpdateTitle = g.updateTitle;
   const origUpdateCar = g.updateCar;
-  // 송신은 거의 보여 주지 않는다: 기본은 앞뒤 모두 검은 실루엣. 얼굴은 마지막 한 순간에만
-  const frontMesh = s.body.children[0];
-  const silhouette = (on) => { frontMesh.material = on ? s.backMat : s.faceMat; };
+  // 피구공은 거의 보여 주지 않는다: 기본은 앞뒤 모두 검은 실루엣. 얼굴은 마지막 한 순간에만
+  const silhouette = (on) => s.setSilhouette(on);
   const origDetect = s.detect;
 
   // window.TR_FROM: 이 번호의 샷부터 촬영 (미리보기용)
@@ -72,7 +72,7 @@
   const root = document.createElement('div');
   root.id = 'tr';
   root.innerHTML = `<div class="black"></div><div class="rule"><div class="hd"></div><div class="tx"></div></div><div class="bar top"></div><div class="bar bot"></div>
-    <div class="logo"><h1>공포의 송신계단</h1><h2>SONGSHIN STAIRWELL</h2>
+    <div class="logo"><h1>${YUGI ? '공포의 채널유기' : '공포의 송신계단'}</h1><h2>${YUGI ? 'CHANNEL YUGI' : 'SONGSHIN STAIRWELL'}</h2>
     <div class="tag"><span class="n">13.</span>끝까지 오르십시오.</div></div>`;
   document.body.appendChild(root);
   const $ = (q) => root.querySelector(q);
@@ -84,7 +84,7 @@
   document.body.classList.remove('menu-on');
 
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
-  const HEADER = '송신아파트 비상계단 이용 수칙';
+  const HEADER = `${YUGI ? '피구공' : '송신'}아파트 비상계단 이용 수칙`;
   const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
   /**
    * 수칙 문구 — [t0, t1] 동안 한 글자씩 타이핑되고, 끝에서 흐려진다.
@@ -160,7 +160,7 @@
     if (yaw !== undefined) p.yaw = yaw;
     p.pitch = pitch;
   }
-  /** 송신을 직접 움직인다: fn(dt) 안에서 phi/r/yaw 를 정함 */
+  /** 피구공을 직접 움직인다: fn(dt) 안에서 phi/r/yaw 를 정함 */
   function scriptStalker(fn) {
     s.update = function (dt, player, game) {
       this.game = game;
@@ -172,7 +172,7 @@
   }
   const uphillYaw = (phi) => Math.PI - phi;
   const faceYaw = (fromX, fromZ, toX, toZ) => Math.atan2(-(toX - fromX), -(toZ - fromZ)); // 플레이어 카메라 기준
-  const meshYawTo = (fx, fz, tx, tz) => Math.atan2(tx - fx, tz - fz); // 송신 평면 기준
+  const meshYawTo = (fx, fz, tx, tz) => Math.atan2(tx - fx, tz - fz); // 피구공 평면 기준
   const firstOpenRoom = (min) => g.world.fireDoors.find((d) => !d.locked && d.k >= min) || g.world.fireDoors.find((d) => !d.locked);
 
   /** 검은 화면 자막 카드 (막과 막 사이) */
@@ -184,7 +184,7 @@
       rule(lt, r ? [{ t0: 0.2, t1: dur - 0.05, center: true, ...r }] : []);
     },
   });
-  /** 송신 얼굴이 화면을 덮치는 짧은 섬광 컷 */
+  /** 피구공 얼굴이 화면을 덮치는 짧은 섬광 컷 */
   function faceFlash(k) {
     resetAll();
     const phi = FLOOR_PHI * k + 0.6;

@@ -16,6 +16,8 @@ import vPause from '../assets/voice/pause.mp3';
 import vAtDoor from '../assets/voice/atDoor.mp3';
 import vCarPanel from '../assets/voice/carpanel.mp3';
 import vWin from '../assets/voice/win.mp3';
+import vWinSongshin from '../assets/voice/win-songshin.mp3'; // 송신계단 판 (송신아파트)
+import { YUGI } from './theme.js';
 import vKey from '../assets/voice/key-intro.mp3';
 
 export const VOICE = {
@@ -39,7 +41,7 @@ export const VOICE = {
     text: '버튼이 고장나 있다. — 이 엘리베이터는, 원하시는 층으로 가지 않습니다.', style: 'close', url: vCarPanel },
   'key-intro': { say: '옥상 문은 잠겨 있습니다. 열쇠는 맨 위층들의 비상실, 혹은 엘리베이터 안에 있습니다.', rate: '-12%', pitch: '-5Hz',
     text: '옥상 문은 잠겨 있습니다. 열쇠는 맨 위층들(25~30층)의 비상실, 혹은 엘리베이터 안에 있습니다.', style: 'pa', chime: true, url: vKey },
-  'win': { say: '피구공아파트 비상계단을 이용해 주셔서 감사합니다.', rate: '-10%', pitch: '-2Hz', style: 'pa', chime: true, url: vWin },
+  'win': { say: '피구공아파트 비상계단을 이용해 주셔서 감사합니다.', rate: '-10%', pitch: '-2Hz', style: 'pa', chime: true, url: YUGI ? vWin : vWinSongshin },
 };
 
 export function voiceText(id, floors) {

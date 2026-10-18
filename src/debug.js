@@ -194,8 +194,7 @@ export class DebugPanel {
         g.refreshTitle?.();
         break;
       case 'reset':
-        g.progress.data = { ach: {}, cleared: {}, deaths: 0, notes: [], hints: [] };
-        g.progress.save();
+        g.progress.reset();
         g.hints?.clear?.();
         g.refreshTitle?.();
         break;

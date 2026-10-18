@@ -8,6 +8,7 @@ try { pw = require('playwright'); } catch { pw = require(require('child_process'
 (async () => {
   const bg = path.resolve(process.argv[2]);
   const out = path.resolve(process.argv[3] || 'thumbnail.png');
+  const YUGI = process.env.TR_THEME === 'yugi'; // 공포의 채널유기 판 썸네일
   const img = 'data:image/jpeg;base64,' + fs.readFileSync(bg).toString('base64');
   const html = `<!doctype html><html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
@@ -33,8 +34,8 @@ try { pw = require('playwright'); } catch { pw = require(require('child_process'
 </style></head><body>
 <div class="bg"></div><div class="shade"></div><div class="red"></div><div class="grain"></div>
 <div class="rec">● REC 06F</div>
-<div class="title"><h1><span class="br">「</span>공포의<br>송신계단<span class="br">」</span></h1><div class="ot">OFFICIAL TRAILER</div></div>
-<div class="rule"><span class="hd">송신아파트 비상계단 이용 수칙</span><span class="n">12.</span>엘리베이터 문이 열리면, 눈을 감으십시오.</div>
+<div class="title"><h1><span class="br">「</span>공포의<br>${YUGI ? '채널유기' : '송신계단'}<span class="br">」</span></h1><div class="ot">OFFICIAL TRAILER</div></div>
+<div class="rule"><span class="hd">${YUGI ? '피구공' : '송신'}아파트 비상계단 이용 수칙</span><span class="n">12.</span>엘리베이터 문이 열리면, 눈을 감으십시오.</div>
 </body></html>`;
   const browser = await pw.chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });

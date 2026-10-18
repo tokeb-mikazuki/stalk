@@ -1,6 +1,8 @@
 // 공포의 채널유기 — 메인 게임 루프
 import * as THREE from 'three';
 import pigugongUrl from '../assets/pigugong.webp';
+import songsinUrl from '../assets/songsin.png';
+import { THEME, YUGI } from './theme.js';
 import {
   FLOOR_PHI, FLOORS, FLOOR_H, R_IN, R_MID, DIFFICULTY,
   baseY, onLanding, landingCenter, polar, setFloors, pathDist, fireDoorPhi, R_OUT, toElevLocal,
@@ -162,18 +164,28 @@ class Game {
     this.applyQuality();
     report(0.6, '피구공을 깨우는 중');
     await tick();
-    // 피구공: 그림을 원형으로 깎아 공에 입힌다
-    const img = await new THREE.ImageLoader().loadAsync(pigugongUrl);
-    this.stalker = new Stalker(this.scene, ballTexture(img));
-    const disc = discCanvas(img);
-    const discTex = new THREE.CanvasTexture(disc);
-    discTex.colorSpace = THREE.SRGBColorSpace;
-    this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex, transparent: true, alphaTest: 0.04, fog: true }));
-    this.phantom.scale.set(1.24, 1.24, 1);
+    if (YUGI) {
+      // 피구공: 그림을 원형으로 깎아 공에 입힌다
+      const img = await new THREE.ImageLoader().loadAsync(pigugongUrl);
+      this.stalker = new Stalker(this.scene, ballTexture(img));
+      const disc = discCanvas(img);
+      const discTex = new THREE.CanvasTexture(disc);
+      discTex.colorSpace = THREE.SRGBColorSpace;
+      this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex, transparent: true, alphaTest: 0.04, fog: true }));
+      this.phantom.scale.set(1.24, 1.24, 1);
+      document.querySelector('#scare img').src = disc.toDataURL('image/png');
+    } else {
+      const tex = await new THREE.TextureLoader().loadAsync(songsinUrl);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.stalker = new Stalker(this.scene, tex);
+      this.phantom = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.04, fog: true }));
+      const aspect = tex.image.width / tex.image.height;
+      this.phantom.scale.set(1.8 * aspect, 1.8, 1);
+      document.querySelector('#scare img').src = songsinUrl;
+    }
     this.phantom.visible = false;
     this.scene.add(this.phantom);
     this.director = new Director(this, this.phantom);
-    document.querySelector('#scare img').src = disc.toDataURL('image/png');
     report(0.75, '셰이더 컴파일 중');
     await tick();
     this.enterTitle(false);
@@ -387,7 +399,7 @@ class Game {
         e.stopPropagation();
         const act = b.dataset.act;
         if (act === 'start') {
-          const dk = b.dataset.diff;
+          const dk = b.dataset.level;
           if (dk === 'nightmare' && !this.progress.isCleared('hard')) {
             this.audio.uiDeny();
             this.hud.toast('하드 모드를 클리어하면 열립니다.');
@@ -403,6 +415,25 @@ class Game {
           this.refreshTitle();
           backTo = 'title';
           this.hud.screen('newgame');
+        } else if (act === 'reset-progress') {
+          // 실수로 지우지 않게: 한 번 누르면 확인 상태, 4초 안에 한 번 더 누르면 지운다
+          if (!b.classList.contains('armed')) {
+            b.classList.add('armed');
+            b.textContent = '한 번 더 누르면 지웁니다';
+            clearTimeout(this.resetArmT);
+            this.resetArmT = setTimeout(() => {
+              b.classList.remove('armed');
+              b.textContent = '초기화';
+            }, 4000);
+          } else {
+            clearTimeout(this.resetArmT);
+            b.classList.remove('armed');
+            b.textContent = '초기화';
+            this.progress.reset();
+            this.hints = new Set();
+            this.refreshTitle();
+            this.hud.toast('도전과제와 플레이 기록을 모두 지웠습니다.');
+          }
         } else if (act === 'reset-hints') {
           this.progress.data.hints = [];
           this.progress.save();
@@ -470,8 +501,8 @@ class Game {
 
   refreshTitle() {
     const open = this.progress.isCleared('hard');
-    document.querySelector('[data-diff=nightmare]').classList.toggle('locked', !open);
-    document.querySelectorAll('.dcard').forEach((c) => c.classList.toggle('cleared', this.progress.isCleared(c.dataset.diff)));
+    document.querySelector('[data-level=nightmare]').classList.toggle('locked', !open);
+    document.querySelectorAll('.dcard').forEach((c) => c.classList.toggle('cleared', this.progress.isCleared(c.dataset.level)));
     const got = ACHIEVEMENTS.filter((a) => this.progress.has(a.id)).length;
     document.getElementById('ach-mini').textContent = `${got}/${ACHIEVEMENTS.length}`;
   }
@@ -1383,7 +1414,7 @@ class Game {
     this.dieSide = Math.random() < 0.5 ? -1 : 1;
     this.dieHit = false;
     this.dieStutter = 0;
-    this.dieDist0 = Math.max(1.4, Math.min(2.6, this.stalker.pos.distanceTo(cam.position)));
+    this.dieDist0 = YUGI ? Math.max(1.4, Math.min(2.6, this.stalker.pos.distanceTo(cam.position))) : Math.max(0.95, Math.min(2.1, this.stalker.pos.distanceTo(cam.position)));
   }
 
   win() {
@@ -1739,7 +1770,7 @@ class Game {
 
     // 4) 피구공이 멀리서 순식간에 덮쳐 온다
     const lunge = t < 0.35 ? 0 : Math.pow(Math.min(1, (t - 0.35) / 0.7), 2.4);
-    const dist = this.dieDist0 + (s.radius + 0.42 - this.dieDist0) * lunge; // 공 표면이 눈앞까지
+    const dist = this.dieDist0 + ((YUGI ? s.radius + 0.42 : 0.62) - this.dieDist0) * lunge; // 얼굴(공 표면)이 눈앞까지
     if (t > 0.35 && !this.dieHit) {
       this.dieHit = true;
       this.audio.jumpscare();
@@ -1979,6 +2010,7 @@ async function boot() {
   await wait(250);
   const game = new Game();
   window.__songsin = game; // 디버그용
+  window.__theme = THEME;
   window.__songsinBack = () => game.onBack(); // 안드로이드 앱의 뒤로 가기
   await game.load((p, step) => {
     $('ld-fill').style.width = `${Math.round(p * 100)}%`;

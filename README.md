@@ -1,9 +1,18 @@
-# 공포의 채널유기
+# 공포의 송신계단 / 공포의 채널유기
 
 ![타이틀](assets/screenshot_title.jpg)
 
 끝없이 이어지는 나선형 계단을 1인칭으로 올라 **옥상 문**까지 탈출하는 3D 추격형 공포 게임입니다.
-엘리베이터를 타고 아무 층에나 내려 계단을 따라 다가오는 존재, **피구공**을 피해야 합니다.
+엘리베이터를 타고 아무 층에나 내려 계단을 따라 다가오는 존재를 피해야 합니다.
+
+같은 게임을 두 판으로 만듭니다. 규칙·맵·AI 는 같고, 쫓아오는 존재와 이름만 다릅니다. 기록(도전과제·클리어)은 판마다 따로 저장됩니다.
+
+| 판 | 쫓아오는 것 | 파일 |
+|---|---|---|
+| **공포의 송신계단** (원작) | **송신** — 얼굴 사진, 뒤는 검은 실루엣 | `dist/index.html` · `dist/songshin-stairwell.apk` |
+| **공포의 채널유기** | **피구공** — 그림(`assets/pigugong.webp`)을 원형으로 깎아 입힌 하얀 공, 통통 튀며 온다 | `dist/channel-yugi.html` · `dist/channel-yugi.apk` |
+
+아래 설명은 채널유기 판의 이름(피구공)으로 적었습니다 — 송신계단 판에서는 '송신'입니다. 소스의 글자도 채널유기 판 기준이고, 송신계단 판은 빌드할 때 이름을 되돌립니다(`tools/build.mjs`, `src/theme.js`).
 
 원작 `reference/Stalker.html`(2D 진행 바 게임)의 아이디어를 3D로 재구성했습니다.
 
@@ -11,11 +20,17 @@
 
 | 방법 | 설명 |
 |---|---|
-| 바로 실행 | `dist/index.html` 을 브라우저(Chrome / Edge / Firefox / Safari)로 엽니다. 파일 하나에 코드·이미지가 모두 들어 있어 서버가 필요 없습니다. |
-| 개발 모드 | `npm install` → `npm run dev` → <http://localhost:5173> (저장하면 자동 재빌드) |
-| 빌드 | `npm run build` → `dist/index.html` 생성 |
-| 안드로이드 | `dist/channel-yugi.apk` 를 폰에 받아 설치합니다 (알 수 없는 앱 설치 허용 필요). 상태바·내비게이션 바 없는 전체 화면, 가로 고정, 화면 꺼짐 방지. 뒤로 가기: 게임 중 일시정지 / 메뉴에서 한 단계 뒤로 / 타이틀에서 앱 내리기 |
-| APK 빌드 | `npm run apk` (JDK 17+ 와 Android SDK 필요 — `ANDROID_HOME` 또는 `android/local.properties`) → `dist/channel-yugi.apk`. 앱 소스는 `android/` (WebView 하나에 `dist/index.html` 을 담는다). 업데이트 설치가 되도록 서명 키 `android/app/songshin-release.jks` 를 저장소에 함께 둔다 |
+| 웹 링크 | 송신계단 <https://tokeb-mikazuki.github.io/stalk/> · 채널유기 <https://tokeb-mikazuki.github.io/stalk/channel-yugi.html> — 링크만 열면 바로 실행 (GitHub Pages). 처음 한 번 저장소 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `claude/wonderful-clarke-c1oien`, 폴더 `/docs` → Save** 로 켜 둔다. `npm run build` 가 `docs/` 에도 두 판을 함께 만든다 |
+| 바로 실행 | `dist/index.html`(송신계단) 또는 `dist/channel-yugi.html`(채널유기)을 브라우저(Chrome / Edge / Firefox / Safari)로 엽니다. 파일 하나에 코드·이미지가 모두 들어 있어 서버가 필요 없습니다. |
+| 개발 모드 | `npm install` → `npm run dev` → <http://localhost:5173> (저장하면 자동 재빌드, 송신계단 판 — 채널유기 판은 `THEME=yugi npm run dev`) |
+| 빌드 | `npm run build` → 두 판을 모두 만든다 |
+| 안드로이드 | `dist/songshin-stairwell.apk` / `dist/channel-yugi.apk` 를 폰에 받아 설치합니다 (알 수 없는 앱 설치 허용 필요, 두 앱을 함께 설치할 수 있다). 상태바·내비게이션 바 없는 전체 화면, 가로 고정, 화면 꺼짐 방지. 뒤로 가기: 게임 중 일시정지 / 메뉴에서 한 단계 뒤로 / 타이틀에서 앱 내리기 |
+| APK 빌드 | `npm run apk` (JDK 17+ 와 Android SDK 필요 — `ANDROID_HOME` 또는 `android/local.properties`) → 두 APK. 앱 소스는 `android/` (WebView 하나에 게임 HTML 을 담는다, 판마다 product flavor). 업데이트 설치가 되도록 서명 키 `android/app/songshin-release.jks` 를 저장소에 함께 둔다 |
+
+### 트레일러 영상 만들기
+
+`bash tools/trailer/make.sh 출력.mp4` — 빌드 → 헤드리스 Chromium 으로 프레임 촬영 → 사운드 합성(numpy/scipy) → ffmpeg 인코딩. 필요: Node + Playwright(Chromium), Python 3 + numpy·scipy, ffmpeg.
+GPU 가 있는 PC 에서는 `TR_GPU=1` 을 붙이면 실제 GPU 렌더(소프트웨어 렌더보다 훨씬 빠르다). 채널유기 판은 `TR_THEME=yugi` — 예: `TR_THEME=yugi TR_GPU=1 bash tools/trailer/make.sh channel-yugi-trailer.mp4`. 썸네일은 `TR_THEME=yugi node tools/trailer/thumbnail.cjs 배경.jpg 출력.png` (배경은 트레일러 프레임 한 장).
 
 PC(키보드 + 마우스)와 모바일(터치) 모두 지원합니다. 이어폰/헤드폰 착용을 권장합니다 (입체 음향).
 
@@ -56,6 +71,7 @@ PC(키보드 + 마우스)와 모바일(터치) 모두 지원합니다. 이어폰
 - **엘리베이터**: 헤어라인 스테인리스 문·문틀, 오른쪽 문짝의 세로 유리창(실제로 비쳐 보여 지나가는 칸이 보인다), 거울·격자 조명·조작반이 있는 칸 내부.
 - **탈출 엔딩**: 옥상 문을 열면 빛이 쏟아지고, 해 뜨는 옥상으로 걸어 나간다 — 판상형 아파트 단지와 아침 안개 속 도심, 강 위로 떠오르는 해, 새 떼, 깜빡이는 항공 장애등. 화면은 흑백에서 따뜻한 색으로 돌아오고, 메인 화면의 자장가가 이번엔 어긋남 없이 끝까지 흐른다.
 - **FOUND YOU 뒤**: 피구공이 문을 부술 수 있는 사냥은 들킨 그 층에서만 유효하다. 다른 층으로 옮기는 데 성공하면 피구공은 관심을 잃고 사라진다.
+- **기록 초기화**: 설정 → 기록 → '초기화' 를 두 번 누르면 그 판의 도전과제와 플레이 기록(클리어·해금된 난이도, 피폭 횟수, 읽은 쪽지, 본 안내 문구)을 모두 지운다.
 - **디버그 패널**: 게임 중 `↑ ↑ ↓ ↓ ← → ← → B A` (또는 Pause 키 5번, 모바일은 일시정지 화면의 'PAUSED' 를 빠르게 5번 탭). 원하는 층으로 이동, 즉시 탈출, 무적·피구공 정지·피구공 숨기기, 체력·배터리 무한, 게임 속도(0.25~3배), FOUND YOU·피구공 호출·멀리 보내기, 비상실 모두 열기, 난이도·도전과제 해금, 진행 초기화, 실시간 상태(피구공 상태·짐작·엘리베이터).
 - **자동 클리어 AI** (디버그 패널): 켜면 AI 가 대신 플레이한다 — 손전등을 끄고 조용히 오르다가, 피구공이 다가오면 먼저 닿을 수 있는 비상실로 숨거나 위에서 내려오면 등을 돌려 달아나고, 악몽에서는 열쇠(비상실 책상 / 엘리베이터 안)를 챙겨 옥상으로 나간다. 들키지 않는 것을 최우선으로 — 피구공이 보이면 피구공보다 먼저 닿는 비상실에 조용히 숨고, 같은 층 체류 한계 전에 층 경계를 넘나들어 시간을 되돌리며, 피구공이 탄 엘리베이터가 오면 문 앞을 피한다. 늘 이기지는 못한다. 숨어 있을 때는 모니터 앞으로 가서 CCTV 를 켜고, 이 층 문 앞 → 전체 층 화면에서 움직임 찾기 → 움직임이 있는 층 크게 보기를 반복하며, 피구공이 바로 위 1~2층에 보이면 지나갈 때까지 기다렸다 나간다.
 - **안내 방송**: 건물 천장 스피커 같은 목소리(트레일러와 같은 TTS)가 안내 문구를 읽어 준다. 처음에는 친절한 안내였다가, 쫓기거나 들키면 일그러진다. 설정 → '안내 방송 음성'으로 끌 수 있다(글자는 그대로).

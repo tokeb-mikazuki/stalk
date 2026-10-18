@@ -1,4 +1,5 @@
 // 도전과제 + 진행 상황 저장 (브라우저 localStorage)
+import { YUGI } from './theme.js';
 export const ACHIEVEMENTS = [
   { id: 'first', name: '첫 탈출', desc: '아무 난이도로 옥상 문을 연다.' },
   { id: 'casual', name: '산책', desc: '캐주얼 클리어.' },
@@ -19,7 +20,8 @@ export const ACHIEVEMENTS = [
   { id: 'friend', name: '피구공의 단골', desc: '피구공에게 10번 피폭당한다. (누적)', hidden: true },
 ];
 
-const KEY = 'songsin-stairs-progress';
+// 판마다 따로 저장한다 (같은 주소에서 열어도 기록이 섞이지 않게)
+const KEY = YUGI ? 'channel-yugi-progress' : 'songsin-stairs-progress';
 
 export class Progress {
   constructor() {
@@ -38,6 +40,12 @@ export class Progress {
     } catch {
       /* 저장 불가 */
     }
+  }
+
+  /** 플레이 기록과 도전과제를 모두 지운다 (클리어·해금, 피폭 횟수, 읽은 쪽지, 본 안내 문구 포함) */
+  reset() {
+    this.data = { ach: {}, cleared: {}, deaths: 0, notes: [], hints: [] };
+    this.save();
   }
 
   has(id) {

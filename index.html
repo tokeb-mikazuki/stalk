@@ -144,6 +144,9 @@
     .row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--blood); }
     .small-btn { font-size: 12px; letter-spacing: .15em; padding: 6px 14px; border: 1px solid #3a3a3a; color: #bdb9ae; }
     .small-btn:hover { border-color: var(--blood); color: #fff; }
+    .small-btn.danger { border-color: #5a2a2a; color: #e7a7a0; }
+    .small-btn.danger.armed { background: var(--blood); border-color: var(--blood); color: #fff; }
+    #settings .row small.sub { display: block; margin-top: 3px; font-size: 11px; letter-spacing: .02em; color: #77736a; }
 
     #ach-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .ach { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid #1f1f1f; background: rgba(255,255,255,.015); opacity: .5; }
@@ -449,7 +452,7 @@
   <section id="newgame" class="screen dim">
     <div class="screen-head"><div class="en">SELECT DIFFICULTY</div><h2>난이도 선택</h2><div class="line"></div></div>
     <div class="cards">
-      <button class="dcard" data-act="start" data-diff="casual" data-nav>
+      <button class="dcard" data-act="start" data-level="casual" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL 01</div><h3>캐주얼</h3><div class="floors">20층</div>
         <p>피구공이 느리고 쉽게 포기한다. 숨을 시간도 넉넉하다. 처음이라면 여기서.</p>
@@ -457,7 +460,7 @@
         <div class="stat">집요함<i style="--v:25%"></i></div>
         <div class="stat">어둠<i style="--v:30%"></i></div>
       </button>
-      <button class="dcard" data-act="start" data-diff="normal" data-nav>
+      <button class="dcard" data-act="start" data-level="normal" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL 02</div><h3>노말</h3><div class="floors">20층 · 권장</div>
         <p>의도한 공포. 피구공은 당신이 있는 층 근처로 자주 내려온다.</p>
@@ -465,7 +468,7 @@
         <div class="stat">집요함<i style="--v:50%"></i></div>
         <div class="stat">어둠<i style="--v:55%"></i></div>
       </button>
-      <button class="dcard" data-act="start" data-diff="hard" data-nav>
+      <button class="dcard" data-act="start" data-level="hard" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL 03</div><h3>하드</h3><div class="floors">20층</div>
         <p>빠르고 집요하다. 손전등 배터리는 금방 닳고, 숨을 수 있는 시간은 짧다.</p>
@@ -473,7 +476,7 @@
         <div class="stat">집요함<i style="--v:75%"></i></div>
         <div class="stat">어둠<i style="--v:75%"></i></div>
       </button>
-      <button class="dcard nightmare" data-act="start" data-diff="nightmare" data-nav>
+      <button class="dcard nightmare" data-act="start" data-level="nightmare" data-nav>
         <div class="badge">CLEAR</div>
         <div class="lv">LEVEL ??</div><h3>악몽</h3><div class="floors">30층</div>
         <p>옥상 문이 잠겨 있다 — 열쇠는 엘리베이터 안, 또는 꼭대기 층들의 비상실에. 피구공은 거의 달리는 속도로 쫓아온다.</p>
@@ -540,6 +543,8 @@
       <div class="row"><span>마우스 감도</span><input type="range" id="set-sens" min="0.3" max="3" step="0.05" /></div>
       <div class="row"><span>마우스 Y축 반전</span><input type="checkbox" id="set-invert" /></div>
       <div class="row"><span>안내 문구 (처음 한 번만 표시)</span><button class="small-btn" data-act="reset-hints">다시 보기</button></div>
+      <h4>기록</h4>
+      <div class="row"><span>도전과제·플레이 기록 초기화<small class="sub">클리어·해금된 난이도, 도전과제, 피폭 횟수, 읽은 쪽지를 모두 지웁니다</small></span><button class="small-btn danger" id="reset-progress" data-act="reset-progress">초기화</button></div>
     </div>
     <div class="back-row"><button class="mi" data-act="back" data-nav>뒤로</button></div>
   </section>
