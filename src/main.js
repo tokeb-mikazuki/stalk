@@ -633,9 +633,33 @@ class Game {
     this.lock();
   }
 
+  /** 안드로이드 뒤로 가기 — 처리했으면 true, 아니면 false (앱을 내린다) */
+  onBack() {
+    if (this.debug.open) {
+      this.debug.toggle(false);
+      return true;
+    }
+    if (this.state === 'playing') {
+      if (this.hud.noteOpen) this.hud.hideNote();
+      else if (this.cctv) this.closeCctv();
+      else this.pause();
+      return true;
+    }
+    const back = document.querySelector('.screen.on [data-act=back]');
+    if (back && back.offsetParent !== null) {
+      back.click();
+      return true;
+    }
+    if (this.state === 'paused') {
+      this.resume();
+      return true;
+    }
+    return false;
+  }
+
   /** 모바일: 전체 화면 + 가로 고정 (탭 같은 사용자 동작 안에서만 가능, iOS 는 지원하지 않음) */
   landscapeFullscreen() {
-    if (!this.isTouch) return;
+    if (!this.isTouch || document.body.classList.contains('app')) return; // 앱은 처음부터 전체 화면
     const el = document.documentElement;
     const fs = !document.fullscreenElement && el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve();
     Promise.resolve(fs).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
@@ -1939,6 +1963,7 @@ async function boot() {
   await wait(250);
   const game = new Game();
   window.__songsin = game; // 디버그용
+  window.__songsinBack = () => game.onBack(); // 안드로이드 앱의 뒤로 가기
   await game.load((p, step) => {
     $('ld-fill').style.width = `${Math.round(p * 100)}%`;
     $('ld-pct').textContent = `${Math.round(p * 100)}%`;

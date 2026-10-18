@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "node tools/build.mjs --serve",
-    "build": "node tools/build.mjs"
+    "build": "node tools/build.mjs",
+    "apk": "bash tools/apk.sh"
   },
   "dependencies": {
     "three": "0.170.0"

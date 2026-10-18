@@ -14,6 +14,8 @@
 | 바로 실행 | `dist/index.html` 을 브라우저(Chrome / Edge / Firefox / Safari)로 엽니다. 파일 하나에 코드·이미지가 모두 들어 있어 서버가 필요 없습니다. |
 | 개발 모드 | `npm install` → `npm run dev` → <http://localhost:5173> (저장하면 자동 재빌드) |
 | 빌드 | `npm run build` → `dist/index.html` 생성 |
+| 안드로이드 | `dist/songshin-stairwell.apk` 를 폰에 받아 설치합니다 (알 수 없는 앱 설치 허용 필요). 상태바·내비게이션 바 없는 전체 화면, 가로 고정, 화면 꺼짐 방지. 뒤로 가기: 게임 중 일시정지 / 메뉴에서 한 단계 뒤로 / 타이틀에서 앱 내리기 |
+| APK 빌드 | `npm run apk` (JDK 17+ 와 Android SDK 필요 — `ANDROID_HOME` 또는 `android/local.properties`) → `dist/songshin-stairwell.apk`. 앱 소스는 `android/` (WebView 하나에 `dist/index.html` 을 담는다). 업데이트 설치가 되도록 서명 키 `android/app/songshin-release.jks` 를 저장소에 함께 둔다 |
 
 PC(키보드 + 마우스)와 모바일(터치) 모두 지원합니다. 이어폰/헤드폰 착용을 권장합니다 (입체 음향).
 
