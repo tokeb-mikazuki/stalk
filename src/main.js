@@ -850,7 +850,7 @@ class Game {
         this.hasKey = true;
         a.pickup();
         a.click(0.5);
-        this.hud.msg(it.car ? '열쇠를 얻었다 — 문이 닫히기 전에 나가라' : '옥상 열쇠를 얻었다', 2.6, it.car ? 'alert' : undefined);
+        this.hud.msg('옥상 열쇠를 얻었다', 2.6);
       } else if (it.type === 'battery') {
         p.battery = Math.min(100, p.battery + 45);
         a.pickup();
