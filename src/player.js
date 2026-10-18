@@ -1,5 +1,6 @@
 // 1인칭 플레이어: WASD 이동(시점 기준), 마우스 시점, 달리기/웅크리기/손전등
 import * as THREE from 'three';
+import { torchCookieTexture } from './textures.js';
 import {
   TAU, FLOOR_PHI, LANDING, R_MID, PHI_MIN, PHI_MAX, PLAYER_R_MIN, PLAYER_R_MAX, EYE, EYE_CROUCH,
   floorIndex, stepTopY, onLanding, toRoomLocal, fromRoomLocal, inRoomArea,
@@ -22,7 +23,8 @@ export class Player {
 
     // 손전등 (카메라에 붙음)
     // 넓게 퍼지는 손전등 (가장자리는 부드럽게)
-    this.torch = new THREE.SpotLight(0xfff0d8, 34, 28, 0.78, 0.8, 1.5);
+    this.torch = new THREE.SpotLight(0xfff0d8, 30, 28, 1.0, 1.0, 1.3);
+    this.torch.map = torchCookieTexture(); // 가장자리를 넓게 페더링 (그림자 켜진 품질에서 적용)
     this.torch.position.set(0.24, -0.215, -0.72);
     this.torch.target.position.set(0.02, -0.06, -7);
     this.torch.castShadow = true;
@@ -391,7 +393,7 @@ export class Player {
 
     const on = this.torchOn;
     const batt = Math.min(1, 0.35 + this.battery / 60);
-    this.torch.intensity = on ? 34 * batt * this.torchFlicker : 0;
+    this.torch.intensity = on ? 30 * batt * this.torchFlicker : 0;
     this.lensMat.color.setScalar(on ? 2.8 * this.torchFlicker : 0.08); // 블룸으로 빛남
   }
 }

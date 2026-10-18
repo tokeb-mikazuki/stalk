@@ -73,7 +73,7 @@ export class TorchFX {
     this.torch = torch;
 
     // 빛줄기 콘: 꼭짓점이 렌즈, 축은 손전등 방향
-    const R = BEAM_LEN * Math.tan(torch.angle * 0.8);
+    const R = BEAM_LEN * Math.tan(torch.angle * 0.5);
     const geo = new THREE.ConeGeometry(R, BEAM_LEN, 40, 12, true);
     geo.translate(0, -BEAM_LEN / 2, 0);
     geo.rotateX(Math.PI / 2);
@@ -144,7 +144,7 @@ export class TorchFX {
 
   update(dt, active, pixelRatio) {
     const t = (this.beamMat.uniforms.uTime.value += dt);
-    const lvl = active ? Math.min(1, this.torch.intensity / 34) : 0;
+    const lvl = active ? Math.min(1, this.torch.intensity / 30) : 0;
     this.beamMat.uniforms.uIntensity.value = lvl;
     this.beam.visible = this.beamOn && lvl > 0.01;
     const u = this.dustMat.uniforms;

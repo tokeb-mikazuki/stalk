@@ -423,3 +423,27 @@ export function roughnessMapFrom(tex, smooth = 0.25, rough = 0.95) {
   t.wrapT = tex.wrapT;
   return t;
 }
+
+/** 손전등 빛 무늬: 가운데가 밝고 가장자리로 갈수록 아주 부드럽게 사라짐 */
+export function torchCookieTexture() {
+  const S = 256;
+  const [c, ctx] = canvas(S, S);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, S, S);
+  const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  // 가운데 밝은 영역은 좁게, 바깥으로는 길게 서서히 사라지는 감쇠
+  g.addColorStop(0.0, 'rgb(255,255,255)');
+  g.addColorStop(0.12, 'rgb(248,248,248)');
+  g.addColorStop(0.17, 'rgb(212,212,212)'); // 반사판이 만드는 은은한 고리
+  g.addColorStop(0.23, 'rgb(222,222,222)');
+  g.addColorStop(0.36, 'rgb(150,150,150)');
+  g.addColorStop(0.52, 'rgb(78,78,78)');
+  g.addColorStop(0.7, 'rgb(28,28,28)');
+  g.addColorStop(0.86, 'rgb(6,6,6)');
+  g.addColorStop(1.0, 'rgb(0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, S, S);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
