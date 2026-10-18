@@ -18,6 +18,8 @@ import { TorchFX } from './fx.js';
 import { Elevator } from './elevator.js';
 import { VOICE, voiceText } from './voice.js';
 
+const CCTV_FPS = 8; // 감시 카메라 화면은 초당 8장
+
 const NOTES = [
   { k: 1, title: '관리일지 — 3월 2일', body: '계단 청소 중 엘리베이터가 혼자 움직였다.\n아무도 타지 않았는데 층수 표시기가 계속 바뀐다.\n\n그건 엘리베이터를 탄다. 버튼을 누르고, 문 앞에서 기다린다.\n엘리베이터가 움직이면… 계단이 조용해진다.' },
   { k: 3, title: '경고문 (찢어짐)', body: '비상구 표시등이 켜진 문은 열립니다.\n안으로 들어가 문을 닫으면 그는 들어오지 못합니다.\n\n단, 같은 층에 오래 머물지 마십시오.\n불이 깜빡이면 이미 그가 알고 있습니다.' },
@@ -79,6 +81,9 @@ class Game {
     this.scene.add(this.irLight);
     this.cctv = null;
     this.cctvGrid = null; // 전체 층 CCTV 화면 (HDR, 칸마다 돌아가며 갱신)
+    this.cctvFull = null; // 한 층 CCTV 화면 (HDR) — 초당 8장만 새로 찍는다
+    this.cctvT = 0;       // 다음 CCTV 프레임까지 남은 시간
+    this.cctvMonT = 0;    // 비상실 모니터 화면 다음 프레임까지
     this.cctvDir = new THREE.Vector3();
     this.lampLights = [];
     for (let i = 0; i < 5; i++) {
@@ -851,6 +856,7 @@ class Game {
   /** 한 층 / 전체 층 화면 전환 후 표시 갱신 */
   setCctvView() {
     const c = this.cctv;
+    c.dirty = true;
     document.getElementById('cctv').classList.toggle('grid', c.grid);
     this.post.uniforms.uWarp.value = c.grid ? 0 : 1;
     if (c.grid) {
@@ -877,6 +883,7 @@ class Game {
     if (c.grid) c.sel = Math.max(0, Math.min(n - 1, c.sel + d));
     else c.k = (((c.k + d) % n) + n) % n;
     c.seen = 0;
+    c.dirty = true;
     this.audio.click(0.25);
     this.updateCctvLabels();
   }
@@ -985,7 +992,7 @@ class Game {
     const c = this.cctv;
     const { cols, cw, ch } = this.cctvGridLayout;
     const n = this.world.fireDoors.length;
-    const per = c.fill < n ? 6 : this.settings.q === 'low' ? 2 : 4;
+    const per = c.fill < n ? 6 : this.settings.q === 'low' ? 3 : 6;
     const r = this.renderer, rt = this.cctvGrid;
     const vm = this.player.viewModel.visible;
     this.player.viewModel.visible = false;
@@ -1022,7 +1029,10 @@ class Game {
     if (!door) return;
     door.recMat.color.setHex(Math.sin(this.time * 6) > 0 ? 0xff2020 : 0x330000);
     if (!this.cctv) {
-      // 모니터 화면에 지금 층 문 앞 실시간 영상
+      // 모니터 화면에 지금 층 문 앞 영상 — 감시 카메라답게 초당 8장
+      this.cctvMonT -= dt;
+      if (this.cctvMonT > 0) return;
+      this.cctvMonT = Math.max(0, this.cctvMonT + 1 / CCTV_FPS);
       const vm = p.viewModel.visible;
       p.viewModel.visible = false;
       this.aimCctv(door.k, 4 / 3);
@@ -1244,18 +1254,39 @@ class Game {
     this.hud.update(dt);
     this.glitch = Math.max(0, this.glitch - dt * 1.6);
     u.uGlitch.value = this.glitch;
+    // CCTV 화면은 초당 8장만 새로 찍는다 (그 사이에는 같은 장면 + 움직이는 잡음)
+    let cctvTick = false;
+    if (this.cctv) {
+      this.cctvT -= dt;
+      if (this.cctvT <= 0 || this.cctv.dirty) {
+        cctvTick = true;
+        this.cctvT = Math.max(0, this.cctvT + 1 / CCTV_FPS);
+        this.cctv.dirty = false;
+      }
+    }
     if (this.cctv && this.cctv.grid) {
-      this.renderCctvGrid();
+      if (cctvTick || this.cctv.fill < this.world.fireDoors.length) this.renderCctvGrid();
       this.post.render(null, null, this.cctvGrid.texture);
     } else if (this.cctv) {
-      this.aimCctv(this.cctv.k, this.camera.aspect);
-      this.irLight.intensity = 3.5;
-      this.player.viewModel.visible = false;
-      const screen = this.world.fireDoors[this.cctv.door.k].screen;
-      screen.visible = false;
-      this.post.render(this.scene, this.cctvCam);
-      screen.visible = true;
-      this.irLight.intensity = 0;
+      const tgt = this.post.target;
+      if (!this.cctvFull) this.cctvFull = new THREE.WebGLRenderTarget(tgt.width, tgt.height, { type: THREE.HalfFloatType });
+      if (this.cctvFull.width !== tgt.width || this.cctvFull.height !== tgt.height) {
+        this.cctvFull.setSize(tgt.width, tgt.height);
+        cctvTick = true;
+      }
+      if (cctvTick) {
+        this.aimCctv(this.cctv.k, this.camera.aspect);
+        this.irLight.intensity = 3.5;
+        this.player.viewModel.visible = false;
+        const screen = this.world.fireDoors[this.cctv.door.k].screen;
+        screen.visible = false;
+        this.renderer.setRenderTarget(this.cctvFull);
+        this.renderer.render(this.scene, this.cctvCam);
+        this.renderer.setRenderTarget(null);
+        screen.visible = true;
+        this.irLight.intensity = 0;
+      }
+      this.post.render(null, null, this.cctvFull.texture);
     } else {
       this.post.render(this.scene, this.camera);
     }

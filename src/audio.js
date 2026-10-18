@@ -1169,21 +1169,67 @@ export class AudioEngine {
       }
     }
     const g = ctx.createGain();
-    g.gain.value = style === 'close' ? 0.9 : 1.15;
+    g.gain.value = style === 'close' ? 0.9 : 1.05;
     node.connect(g);
-    this.out(g, style === 'close' ? 0.05 : 0.45);
+    let outNode = g;
     if (style === 'glitch') {
       const gate = ctx.createGain();
-      g.disconnect();
       g.connect(gate);
-      this.out(gate, 0.3);
+      outNode = gate;
       for (let k = 0.4; k < buf.duration; k += 0.5 + Math.random() * 0.6) {
         gate.gain.setValueAtTime(0.05, t + k);
         gate.gain.setValueAtTime(1, t + k + 0.05 + Math.random() * 0.06);
       }
     }
+    if (style === 'close') {
+      this.out(outNode, 0.12);
+    } else {
+      // 텅 빈 콘크리트 계단실에 울려 퍼지는 방송: 잔향 + 위아래 층에서 되돌아오는 메아리
+      outNode.connect(this.master);
+      const wet = ctx.createGain();
+      wet.gain.value = 0.75;
+      outNode.connect(wet).connect(this.reverbIn);
+      const slap = ctx.createGain();
+      slap.gain.value = 0.35;
+      outNode.connect(slap).connect(this.slapIn);
+      const echo = ctx.createGain();
+      echo.gain.value = 0.4;
+      outNode.connect(echo).connect(this.paEchoIn());
+    }
     src.start(t);
     src.onended = () => this.nextAnnouncement();
+  }
+
+  /** 안내 방송 전용 긴 메아리 (먼 층의 스피커에서 조금 늦게 다시 들리는 소리) */
+  paEchoIn() {
+    if (this.paEcho) return this.paEcho;
+    const ctx = this.ctx;
+    const inp = ctx.createGain();
+    const d1 = ctx.createDelay(2);
+    d1.delayTime.value = 0.34;
+    const d2 = ctx.createDelay(2);
+    d2.delayTime.value = 0.57;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.3;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1900;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 380;
+    const mix = ctx.createGain();
+    mix.gain.value = 0.6;
+    inp.connect(d1);
+    inp.connect(d2);
+    d1.connect(lp);
+    d2.connect(lp);
+    lp.connect(hp).connect(fb).connect(d1);
+    hp.connect(mix).connect(this.master);
+    const rv = ctx.createGain();
+    rv.gain.value = 0.5;
+    mix.connect(rv).connect(this.reverbIn);
+    this.paEcho = inp;
+    return inp;
   }
 
   // ---------------- 메인 화면 음악 ----------------
