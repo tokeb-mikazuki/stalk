@@ -165,7 +165,7 @@ export const DIFFICULTY_ORDER = ['casual', 'normal', 'hard', 'nightmare'];
 export const DIFFICULTY = {
   casual: {
     label: '캐주얼',
-    ai: { hear: 22, floorErr: 2.2, memory: 14, predict: 0, checkRooms: false, patience: 26, lightSense: 0 },
+    ai: { hear: 18, floorErr: 2.2, memory: 14, predict: 0, checkRooms: false, patience: 26, lightSense: 0 },
     floors: 20,
     chaseSpeed: 3.4,         // 추격 속도(m/s) — 걷기(2.9)보다 빠르고 달리기(5.4)보다 느림
     chaseSpeedPerFloor: 0.02,
@@ -178,8 +178,8 @@ export const DIFFICULTY = {
     graceTime: 30,           // 시작 유예
     hideThreshold: 70,       // 같은 층 체류 한계(s) — 원작의 HIDE_THRESH
     searchTime: 5,           // 닫힌 문 앞에서 서성이는 시간
-    sight: 6,
-    hearingMul: 0.8,
+    sight: 5,
+    hearingMul: 0.65,
     batteryDrain: 0.9,       // 손전등 배터리 소모(%/s)
     batteries: 6,            // 계단에 떨어진 배터리 수
     roomBatteries: 0.9,      // 열린 비상실 책상에 배터리가 있을 확률
@@ -191,7 +191,7 @@ export const DIFFICULTY = {
   },
   normal: {
     label: '노말',
-    ai: { hear: 36, floorErr: 1.2, memory: 24, predict: 0.3, checkRooms: false, patience: 22, lightSense: 1 },
+    ai: { hear: 30, floorErr: 1.2, memory: 24, predict: 0.3, checkRooms: false, patience: 22, lightSense: 1 },
     floors: 20,
     chaseSpeed: 3.9,
     chaseSpeedPerFloor: 0.03,
@@ -204,8 +204,8 @@ export const DIFFICULTY = {
     graceTime: 22,
     hideThreshold: 45,
     searchTime: 7,
-    sight: 8,
-    hearingMul: 1.0,
+    sight: 6.5,
+    hearingMul: 0.8,
     batteryDrain: 1.5,
     batteries: 5,
     roomBatteries: 0.75,
@@ -217,7 +217,7 @@ export const DIFFICULTY = {
   },
   hard: {
     label: '하드',
-    ai: { hear: 52, floorErr: 0.6, memory: 38, predict: 0.7, checkRooms: true, patience: 16, lightSense: 1.5 },
+    ai: { hear: 43, floorErr: 0.6, memory: 38, predict: 0.7, checkRooms: true, patience: 16, lightSense: 1.5 },
     floors: 20,
     chaseSpeed: 4.4,
     chaseSpeedPerFloor: 0.035,
@@ -230,8 +230,8 @@ export const DIFFICULTY = {
     graceTime: 15,
     hideThreshold: 35,
     searchTime: 10,
-    sight: 10,
-    hearingMul: 1.25,
+    sight: 8,
+    hearingMul: 1.0,
     batteryDrain: 2.0,
     batteries: 4,
     roomBatteries: 0.6,
@@ -243,7 +243,7 @@ export const DIFFICULTY = {
   },
   nightmare: {
     label: '악몽',
-    ai: { hear: 75, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2 },
+    ai: { hear: 62, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2 },
     floors: 30,
     chaseSpeed: 4.8,
     chaseSpeedPerFloor: 0.02,  // 꼭대기에서는 거의 달리기 속도
@@ -256,8 +256,8 @@ export const DIFFICULTY = {
     graceTime: 10,
     hideThreshold: 25,
     searchTime: 13,
-    sight: 12,
-    hearingMul: 1.5,
+    sight: 9.5,
+    hearingMul: 1.2,
     batteryDrain: 2.6,
     batteries: 3,
     roomBatteries: 0.5,

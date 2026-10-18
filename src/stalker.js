@@ -451,7 +451,7 @@ export class Stalker {
     const d = this.distTo(player);
     // 위로 올라갈수록 아주 조금씩 더 예민해진다 (꼭대기에서 약 +30%)
     const sharp = 1 + 0.3 * this.heightRatio(player);
-    const sight = (this.diff.sight + (player.torchOn ? 4 : 0) - (player.crouching ? 3 : 0)) * sharp;
+    const sight = (this.diff.sight + (player.torchOn ? 3 : 0) - (player.crouching ? 2.5 : 0)) * sharp;
     return d < Math.max(player.noise * sharp, sight);
   }
 

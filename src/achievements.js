@@ -16,7 +16,7 @@ export const ACHIEVEMENTS = [
   { id: 'speed', name: '계단 스프린터', desc: '노말 이상에서 6분 안에 탈출한다.' },
   { id: 'reader', name: '기록 보관인', desc: '모든 쪽지를 읽는다. (누적)' },
   { id: 'trap', name: '고장난 버튼', desc: '엘리베이터에 탔다.', hidden: true },
-  { id: 'friend', name: '송신의 단골', desc: '송신에게 10번 잡힌다. (누적)', hidden: true },
+  { id: 'friend', name: '송신의 단골', desc: '송신에게 10번 피폭당한다. (누적)', hidden: true },
 ];
 
 const KEY = 'songsin-stairs-progress';
