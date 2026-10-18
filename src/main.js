@@ -18,7 +18,7 @@ import { TorchFX } from './fx.js';
 import { Elevator } from './elevator.js';
 
 const NOTES = [
-  { k: 1, title: '관리일지 — 3월 2일', body: '계단 청소 중 엘리베이터가 혼자 움직였다.\n아무도 타지 않았는데 층수 표시기가 계속 바뀐다.\n\n표시기에 숫자가 보이면 그건 엘리베이터 안에 있다.\n"Err"가 뜨면… 계단 어딘가에 있다.' },
+  { k: 1, title: '관리일지 — 3월 2일', body: '계단 청소 중 엘리베이터가 혼자 움직였다.\n아무도 타지 않았는데 층수 표시기가 계속 바뀐다.\n\n그건 엘리베이터를 탄다. 버튼을 누르고, 문 앞에서 기다린다.\n엘리베이터가 움직이면… 계단이 조용해진다.' },
   { k: 3, title: '경고문 (찢어짐)', body: '비상구 표시등이 켜진 문은 열립니다.\n안으로 들어가 문을 닫으면 그는 들어오지 못합니다.\n\n단, 같은 층에 오래 머물지 마십시오.\n불이 깜빡이면 이미 그가 알고 있습니다.' },
   { k: 6, title: '누군가의 메모', body: '그는 엘리베이터에서 내려 계단을 따라 걸어 온다.\n위층에서 내려올 때가 제일 무섭다.\n\n발소리를 줄여. 손전등도 꺼.\n그는 빛과 소리를 따라온다.' },
   { k: 9, title: '송신탑 무전 기록', body: '…수신기가 지직거리면 가까이 있다는 뜻이다.\n막대가 붉게 차면 뒤를 보지 말고 뛰어라.\n가장 가까운 비상문으로.' },
@@ -500,6 +500,7 @@ class Game {
     this.elevator.reset(Math.round(this.stalker.elevFloor));
     this.elevator.occupant = 'stalker';
     this.trap = null;
+    this.stalkerOnStairs = undefined;
     this.director.reset();
     this.phantom.visible = false;
     this.time = 0;
@@ -532,7 +533,7 @@ class Game {
       } catch { /* 전체 화면 미지원 */ }
     }
     this.director.after(1.5, () => this.hint('intro-goal', `목표: 맨 위층(${FLOORS}F) 옥상 문으로 탈출 — 벽의 층 번호를 확인하라`, 4));
-    this.director.after(5.5, () => this.hint('intro-elevator', '엘리베이터 표시기 — 숫자: 송신이 엘리베이터 안 · Err: 계단 위', 4.5));
+    this.director.after(5.5, () => this.hint('intro-elevator', '엘리베이터 표시기 = 엘리베이터의 현재 층 · 송신도 엘리베이터를 탄다', 4.5));
     this.director.after(10.5, () => this.hint('intro-door', '초록 비상구 표시 문 = 숨을 곳 · [E] 열기/닫기', 4));
   }
 
@@ -575,7 +576,7 @@ class Game {
       if (!this.touch.enabled) this.hud.clickHint.classList.add('on');
     }
     document.body.classList.remove('menu-on');
-    this.stalker.ambush(this.player, this);
+    if (!this.trap) this.stalker.ambush(this.player, this); // 엘리베이터 함정 중이면 이미 끝이 정해져 있다
     this.hud.msg('이것으로는 숨을 수 없다', 3.5);
   }
 
@@ -981,10 +982,11 @@ class Game {
     const m = new THREE.Matrix4().lookAt(cam.position, target, new THREE.Vector3(0, 1, 0));
     this.dieQLook = new THREE.Quaternion().setFromRotationMatrix(m);
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.dieQLook);
-    this.dieBack = fwd.clone().setY(0).normalize().multiplyScalar(-1);
+    this.dieBack = fwd.clone().setY(0).normalize().multiplyScalar(this.player.inCar ? 0 : this.player.inRoom ? -0.4 : -1);
     this.dieSide = Math.random() < 0.5 ? -1 : 1;
     this.dieHit = false;
     this.dieStutter = 0;
+    this.dieDist0 = Math.max(0.95, Math.min(2.1, this.stalker.pos.distanceTo(cam.position)));
   }
 
   win() {
@@ -1022,6 +1024,7 @@ class Game {
     if (this.state !== 'paused') {
       this.updateLamps(dt);
       this.updateDoors(dt);
+      this.updateCar(dt); // 사망 연출 중에도 엘리베이터 문은 계속 열린다
     }
     if (this.state === 'playing') this.fx.setHeight(this.player.footY / Math.max(1, (FLOORS - 1) * FLOOR_H));
     this.fx.update(dt, (this.state === 'playing' || this.state === 'winning') && !this.cctv && !this.director?.torchKill, this.pixelRatio);
@@ -1127,8 +1130,13 @@ class Game {
         return;
       }
     }
-    this.updateCar(dt);
     s.update(dt, p, this);
+    // 송신이 엘리베이터에서 내리거나 탈 때마다 기척으로 알린다
+    const onStairs = !s.inElevator;
+    if (!this.trap && this.stalkerOnStairs !== undefined && onStairs !== this.stalkerOnStairs) {
+      this.hud.msg(onStairs ? '계단에 누군가 있는 것 같다' : '계단에 인기척이 느껴지지 않는다', 3.2, 'alert');
+    }
+    this.stalkerOnStairs = onStairs;
     this.doorBlocked = p.inRoom && !s.inElevator && s.roomK < 0 && s.floor === p.roomK
       && pathDist(s.phi, s.r, fireDoorPhi(p.roomK), R_OUT - 0.45) < 7;
     this.director.update(dt);
@@ -1159,7 +1167,7 @@ class Game {
     if (prox > 0.75 && Math.random() < dt * 2) this.glitchPulse(0.25);
 
     // ---- 잡힘 ----
-    if (s.visible && s.state !== 'vanish' && s.state !== 'elevator') {
+    if (s.visible && s.state !== 'vanish' && s.state !== 'elevator' && !this.trap) {
       const dx = s.pos.x - p.x, dz = s.pos.z - p.z;
       if (s.chasing && dx * dx + dz * dz < 1 && Math.abs(s.footY - p.footY) < 1.5) this.run.nearMiss = true;
       if (dx * dx + dz * dz < 0.62 && Math.abs(s.footY - p.footY) < 1.5) {
@@ -1179,7 +1187,11 @@ class Game {
     this.touch.update(target);
 
     // ---- 엘리베이터 표시기 ----
-    let ind = s.indicator();
+    // 표시기: 실제 엘리베이터 위치 (송신이 탔는지는 알려주지 않는다)
+    const el = this.elevator;
+    const edir = el.moving ? Math.sign(el.target - el.floor) : 0;
+    const shown = edir > 0 ? Math.floor(el.floor + 1e-6) : Math.ceil(el.floor - 1e-6);
+    let ind = { text: `${shown + 1}`, dir: edir, err: false };
     if (s.glitchT > 0) {
       ind = { text: `${1 + Math.floor(Math.random() * FLOORS)}`, dir: Math.random() < 0.5 ? 1 : -1, err: Math.random() < 0.15 };
       if (Math.random() > dt * 12) ind = this.lastInd || ind;
@@ -1235,7 +1247,7 @@ class Game {
 
     // 4) 송신이 멀리서 순식간에 덮쳐 온다
     const lunge = t < 0.35 ? 0 : Math.pow(Math.min(1, (t - 0.35) / 0.7), 2.4);
-    const dist = 2.1 + (0.62 - 2.1) * lunge;
+    const dist = this.dieDist0 + (0.62 - this.dieDist0) * lunge;
     if (t > 0.35 && !this.dieHit) {
       this.dieHit = true;
       this.audio.jumpscare();
@@ -1410,8 +1422,8 @@ function saveSettings(s) {
 
 // ------------------------------------------------------------------ 부팅
 const LOADING_TIPS = [
-  '엘리베이터 표시기에 층수가 보이면, 송신은 엘리베이터 안에 있다.',
-  '표시기에 Err가 뜨면 송신은 계단 어딘가에 있다.',
+  '엘리베이터 표시기는 엘리베이터가 지금 몇 층에 있는지 보여준다.',
+  '송신이 엘리베이터에서 내리면, 계단에서 기척이 느껴진다.',
   '초록 비상구 표시등이 켜진 문 안으로 숨을 수 있다. 문은 꼭 닫아라.',
   '비상실 안의 CCTV로 문 앞에 무엇이 있는지 확인할 수 있다.',
   '같은 층에 오래 머물면 조명이 깜빡이기 시작한다. 그건 경고다.',

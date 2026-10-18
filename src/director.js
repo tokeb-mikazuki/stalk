@@ -66,7 +66,7 @@ export class Director {
       this.warnFloor = p.floor;
       this.hideWarned = false;
     }
-    if (p.floor >= 1 && !s.chasing && !s.hunting) {
+    if (p.floor >= 1 && !s.chasing && !s.hunting && !g.trap) {
       if (!this.hideWarned && p.floorTime > diff.hideThreshold - 12) {
         this.hideWarned = true;
         this.flicker(1.8);
@@ -99,7 +99,7 @@ export class Director {
     this.updatePhantom(dt);
 
     // ---- 무작위 이벤트 ----
-    if (s.chasing || s.hunting) return;
+    if (s.chasing || s.hunting || g.trap) return;
     this.next -= dt;
     if (this.next <= 0) {
       this.next = diff.eventMin + Math.random() * (diff.eventMax - diff.eventMin);

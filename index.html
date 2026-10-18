@@ -215,6 +215,7 @@
     #prompt kbd { font-family: var(--mono); color: #111; background: #e6e2d6; font-weight: 700; padding: 0 .45em; margin-right: .6em; border-radius: 2px; font-size: .9em; }
     #msg { position: absolute; left: 50%; bottom: 17%; transform: translateX(-50%); font-size: clamp(13px, 1.1vw + 0.9vh, 28px); line-height: 1.45; padding: 0.3em 0.8em; background: radial-gradient(ellipse at center, rgba(0,0,0,.5), rgba(0,0,0,0) 70%); text-align: center; text-shadow: 0 0 8px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; max-width: 80vw; }
     #msg.on { opacity: 1; }
+    #msg.alert { color: #ff4040; font-weight: 700; letter-spacing: .08em; text-shadow: 0 0 10px rgba(255,0,0,.55), 0 0 2px #000; }
     #warn { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); font-family: var(--serif); font-size: clamp(36px, 5vw, 72px); font-weight: 900; color: var(--red); letter-spacing: .3em; text-shadow: 0 0 18px var(--red); opacity: 0; white-space: nowrap; }
     #warn.on { animation: warn 2.2s forwards; }
     @keyframes warn { 0% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); } 8% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 12% { opacity: .2; } 16% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -426,7 +427,7 @@
       <ul class="tips">
         <li><b>목표</b> — 꼭대기 층(악몽은 30층) 옥상 문을 열고 탈출한다.</li>
         <li><b>송신</b>은 엘리베이터를 타고 아무 층에나 내려, 계단을 따라 당신 쪽으로 걸어온다. 위층에서 내려오기도 한다.</li>
-        <li>엘리베이터 표시기에 층수가 뜨면 송신은 엘리베이터 안, <b>Err</b>가 뜨면 계단 어딘가에 있다.</li>
+        <li>엘리베이터 표시기는 <b>엘리베이터의 현재 층</b>을 보여준다. 송신이 엘리베이터에서 내리거나 타면 <b style="color:#ff5050">계단의 기척</b>으로 알 수 있다.</li>
         <li><b>초록 비상구</b> 표시등이 켜진 문 안으로 숨을 수 있다. 들어가서 <b>문을 닫으면</b> 송신은 문 앞을 서성이다 떠난다.</li>
         <li>비상실 안쪽 벽의 <b>CCTV 모니터</b>로 문 앞을 확인할 수 있다.</li>
         <li>같은 층에 너무 오래 머물면 불이 깜빡이고, 곧 송신이 찾아와 문을 부수고 들어온다.</li>

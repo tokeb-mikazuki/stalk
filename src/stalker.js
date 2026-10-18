@@ -290,6 +290,7 @@ export class Stalker {
 
   /** 외부 사건(층 체류, 마지막 추격)으로 플레이어를 사냥하러 옴. offset: 플레이어 층 기준 도착 층 */
   hunt(player, offset = 0) {
+    if (this.state === 'trapWait') return 'already';
     if (this.state === 'chase') {
       this.burst = true;
       return 'already';
@@ -304,7 +305,6 @@ export class Stalker {
       return 'chase';
     }
     this.huntOffset = offset;
-    if (this.state === 'trapWait') return 'already';
     if (this.state === 'elevator') {
       this.hunting = true;
       this.elevDelay = Math.min(this.elevDelay, 1.2);
@@ -652,14 +652,4 @@ export class Stalker {
     b.rotation.x = this.chasing ? -0.12 : 0;
   }
 
-  /** 엘리베이터 표시기에 보여줄 내용 (원작: 엘리베이터면 층수, 계단이면 Err) */
-  indicator() {
-    const el = this.game && this.game.elevator;
-    if (el && el.occupant === 'stalker') {
-      const dir = el.moving ? Math.sign(el.target - el.floor) : 0;
-      const shown = dir > 0 ? Math.floor(el.floor + 1e-6) : Math.ceil(el.floor - 1e-6);
-      return { text: `${shown + 1}`, dir, err: false };
-    }
-    return { text: '', dir: 0, err: true };
-  }
 }

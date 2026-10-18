@@ -82,8 +82,10 @@ export class Hud {
     this.prompt.classList.toggle('on', !!text);
   }
 
-  msg(text, dur = 3.2) {
+  /** 하단 문구. cls: 'alert' 이면 붉은 강조 */
+  msg(text, dur = 3.2, cls = '') {
     this.msgEl.textContent = text;
+    this.msgEl.classList.toggle('alert', cls === 'alert');
     this.msgEl.classList.add('on');
     this.msgT = dur;
   }
