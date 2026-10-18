@@ -507,3 +507,203 @@ export function torchCookieTexture() {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+
+// ---------------------------------------------------------------- 엘리베이터 (스테인리스)
+/** 헤어라인 스테인리스: 한 방향으로 아주 가늘게 긁힌 결 + 희미한 지문 */
+export function stainlessTexture(seed = 21, vertical = true, base = 168) {
+  const [c, ctx] = canvas(256, 512);
+  const r = rng(seed);
+  ctx.fillStyle = `rgb(${base},${base + 2},${base + 5})`;
+  ctx.fillRect(0, 0, 256, 512);
+  // 헤어라인 결
+  for (let i = 0; i < 1400; i++) {
+    const v = base - 30 + r() * 70;
+    ctx.fillStyle = `rgba(${v},${v + 1},${v + 4},${0.08 + r() * 0.12})`;
+    if (vertical) ctx.fillRect(r() * 256, r() * 512 - 60, 1, 80 + r() * 300);
+    else ctx.fillRect(r() * 256 - 60, r() * 512, 80 + r() * 300, 1);
+  }
+  // 넓게 번지는 광택 띠
+  const gl = ctx.createLinearGradient(0, 0, 256, 0);
+  gl.addColorStop(0, 'rgba(255,255,255,0)');
+  gl.addColorStop(0.45, 'rgba(255,255,255,0.07)');
+  gl.addColorStop(0.55, 'rgba(255,255,255,0.0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(0, 0, 256, 512);
+  // 지문·손때 (손이 닿는 높이에 몇 개)
+  for (let i = 0; i < 6; i++) {
+    const x = 30 + r() * 196, y = 220 + r() * 110;
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, 9 + r() * 6);
+    gr.addColorStop(0, 'rgba(70,64,60,0.18)');
+    gr.addColorStop(1, 'rgba(70,64,60,0)');
+    ctx.fillStyle = gr;
+    ctx.fillRect(x - 16, y - 16, 32, 32);
+  }
+  return toTexture(c);
+}
+
+/** 엘리베이터 칸 벽: 세로 이음매로 나뉜 스테인리스 판 + 아래 걸레받이 */
+export function carWallTexture(seed = 33) {
+  const [c, ctx] = canvas(512, 512);
+  const base = stainlessTexture(seed, true, 176).image;
+  ctx.drawImage(base, 0, 0, 512, 512);
+  // 판 이음매 (3장)
+  for (const x of [0, 170, 341, 511]) {
+    ctx.fillStyle = 'rgba(30,32,36,0.85)';
+    ctx.fillRect(x - 1, 0, 3, 512);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(x + 2, 0, 1, 512);
+  }
+  // 걸레받이 (아래 6%)
+  ctx.fillStyle = '#4a4c50';
+  ctx.fillRect(0, 481, 512, 31);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(0, 481, 512, 2);
+  return toTexture(c, false);
+}
+
+/** 조작반: 층 버튼(숫자) + 열림/닫힘 + 비상 호출 */
+export function copTexture(floors) {
+  const [c, ctx] = canvas(256, 768);
+  const base = stainlessTexture(41, true, 186).image;
+  ctx.drawImage(base, 0, 0, 256, 768);
+  ctx.strokeStyle = 'rgba(40,40,44,0.8)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(6, 6, 244, 756);
+  const cols = 3, rows = Math.ceil(floors / cols);
+  const bw = 62, bh = Math.min(62, 470 / rows), x0 = 128 - (cols * bw) / 2, y0 = 120;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const button = (cx, cy, rad, label, ring = '#2a2c30') => {
+    ctx.fillStyle = ring;
+    ctx.beginPath(); ctx.arc(cx, cy, rad + 4, 0, Math.PI * 2); ctx.fill();
+    const g = ctx.createRadialGradient(cx - rad * 0.3, cy - rad * 0.3, 1, cx, cy, rad);
+    g.addColorStop(0, '#e9eaec');
+    g.addColorStop(1, '#a8abb0');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#26282c';
+    ctx.font = `bold ${Math.round(rad * 0.95)}px Arial, sans-serif`;
+    ctx.fillText(label, cx, cy + 1);
+  };
+  for (let i = 0; i < floors; i++) {
+    const row = rows - 1 - Math.floor(i / cols), col = i % cols;
+    button(x0 + col * bw + bw / 2, y0 + row * bh + bh / 2, Math.min(20, bh * 0.36), String(i + 1));
+  }
+  const yb = y0 + rows * bh + 40;
+  button(84, yb, 22, '◀▶');
+  button(172, yb, 22, '▶◀');
+  // 비상 호출 (노란 종)
+  ctx.fillStyle = '#2a2c30';
+  ctx.beginPath(); ctx.arc(128, yb + 70, 28, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e8b81f';
+  ctx.beginPath(); ctx.arc(128, yb + 70, 24, 0, Math.PI * 2); ctx.fill();
+  // 종 모양
+  ctx.fillStyle = '#2a2620';
+  ctx.beginPath();
+  ctx.moveTo(116, yb + 80);
+  ctx.quadraticCurveTo(116, yb + 56, 128, yb + 56);
+  ctx.quadraticCurveTo(140, yb + 56, 140, yb + 80);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(112, yb + 79, 32, 4);
+  ctx.beginPath(); ctx.arc(128, yb + 86, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.font = '15px "Noto Sans KR", sans-serif';
+  ctx.fillStyle = '#3a3c40';
+  ctx.fillText('비상호출', 128, yb + 112);
+  // 위쪽 작은 표시창 자리 (어둡게)
+  ctx.fillStyle = '#0b0b0c';
+  ctx.fillRect(58, 30, 140, 56);
+  return toTexture(c, false);
+}
+
+/** 문에 붙은 '손 끼임 주의' 스티커 */
+export function cautionStickerTexture() {
+  const [c, ctx] = canvas(128, 160);
+  ctx.fillStyle = '#f2c21b';
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(4, 4, 120, 152, 10) : ctx.rect(4, 4, 120, 152);
+  ctx.fill();
+  ctx.strokeStyle = '#1b1b1b';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  // 문 사이에 낀 손
+  ctx.fillStyle = '#1b1b1b';
+  ctx.fillRect(60, 18, 8, 80);
+  ctx.beginPath();
+  ctx.ellipse(46, 62, 16, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
+  for (let i = 0; i < 4; i++) ctx.fillRect(48 + i * 0, 36 + i * 9, 18, 5);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 19px "Noto Sans KR", sans-serif';
+  ctx.fillText('손 끼임', 64, 120);
+  ctx.fillText('주의', 64, 142);
+  return toTexture(c, false);
+}
+
+/** 정원·적재하중 표지판 */
+export function capacityPlateTexture() {
+  const [c, ctx] = canvas(256, 128);
+  ctx.fillStyle = '#1d2a3c';
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.strokeStyle = '#c9ced6';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(5, 5, 246, 118);
+  ctx.fillStyle = '#e8ebef';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 26px "Noto Sans KR", sans-serif';
+  ctx.fillText('정원 15인', 128, 46);
+  ctx.font = '20px "Noto Sans KR", sans-serif';
+  ctx.fillText('적재하중 1,000 kg', 128, 78);
+  ctx.font = '13px "Noto Sans KR", sans-serif';
+  ctx.fillStyle = '#9fb0c6';
+  ctx.fillText('승강기 안전인증 · 송신아파트', 128, 106);
+  return toTexture(c, false);
+}
+
+/** 칸 바닥: 짙은 화강석 무늬 타일 */
+export function carFloorTexture() {
+  const [c, ctx] = canvas(256, 256);
+  const r = rng(77);
+  ctx.fillStyle = '#3a3836';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 3000; i++) {
+    const v = 30 + r() * 90;
+    ctx.fillStyle = `rgba(${v},${v - 2},${v - 4},0.5)`;
+    ctx.fillRect(r() * 256, r() * 256, 1 + r() * 2, 1 + r() * 2);
+  }
+  ctx.strokeStyle = 'rgba(15,15,15,0.7)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, 254, 254);
+  ctx.strokeRect(128, 0, 0.1, 256);
+  ctx.beginPath(); ctx.moveTo(128, 0); ctx.lineTo(128, 256); ctx.moveTo(0, 128); ctx.lineTo(256, 128); ctx.stroke();
+  return toTexture(c, false);
+}
+
+/** 천장 조명: 격자 틀 + 젖빛 LED 판 */
+export function carCeilingTexture() {
+  const [c, ctx] = canvas(256, 256);
+  ctx.fillStyle = '#2b2d30';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let y = 0; y < 3; y++) {
+    for (let x = 0; x < 3; x++) {
+      const g = ctx.createRadialGradient(42 + x * 86, 42 + y * 86, 4, 42 + x * 86, 42 + y * 86, 52);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(1, '#d9dde4');
+      ctx.fillStyle = g;
+      ctx.fillRect(8 + x * 86, 8 + y * 86, 70, 70);
+    }
+  }
+  return toTexture(c, false);
+}
+
+/** 문턱 (홈이 파인 알루미늄) */
+export function sillTexture() {
+  const [c, ctx] = canvas(256, 32);
+  ctx.fillStyle = '#9a9c9f';
+  ctx.fillRect(0, 0, 256, 32);
+  for (let y = 4; y < 32; y += 7) {
+    ctx.fillStyle = '#3b3c3e';
+    ctx.fillRect(0, y, 256, 3);
+  }
+  return toTexture(c);
+}

@@ -19,6 +19,7 @@ import { Elevator } from './elevator.js';
 import { VOICE, voiceText } from './voice.js';
 import { Ending } from './ending.js';
 import { DebugPanel } from './debug.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 const CCTV_FPS = 8; // 감시 카메라 화면은 초당 8장
 
@@ -148,6 +149,7 @@ class Game {
     report(0.06, '계단실 설계 중');
     await tick();
     this.world = buildWorld(this.scene);
+    this.applyElevatorReflections();
     report(0.45, '조명과 그림자 설치 중');
     await tick();
     this.applyQuality();
@@ -462,6 +464,7 @@ class Game {
     });
     setFloors(floors);
     this.world = buildWorld(this.scene);
+    this.applyElevatorReflections();
     this.applyAnisotropy();
   }
 
@@ -1245,6 +1248,32 @@ class Game {
     if (!this.ending) this.ending = new Ending(this.world.mat?.concrete?.map);
     this.ending.reset();
     this.endingOn = false;
+  }
+
+  /**
+   * 스테인리스는 비칠 것이 있어야 스테인리스처럼 보인다: 엘리베이터 재질에만 반사 환경맵을 붙인다.
+   * 밝은 칸 안은 또렷하게, 어두운 승강장 문은 은은하게 (어둠 속에서 문이 빛나 보이지 않도록).
+   */
+  applyElevatorReflections() {
+    if (!this.envMap) {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem.dispose();
+    }
+    const m = this.world.mat;
+    for (const mt of [m.steel, m.sill]) {
+      mt.envMap = this.envMap;
+      mt.envMapIntensity = 0.12;
+      mt.needsUpdate = true;
+    }
+    this.world.car.group.traverse((o) => {
+      for (const mt of [].concat(o.material || [])) {
+        if (mt.isMeshStandardMaterial && mt.metalness >= 0.6 && mt !== m.steel && mt !== m.sill) {
+          mt.envMap = this.envMap;
+          mt.needsUpdate = true;
+        }
+      }
+    });
   }
 
   /** 엔딩 장면을 끄고 계단실 색감으로 되돌린다 */

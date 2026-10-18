@@ -10,6 +10,8 @@ import {
   tileTexture, concreteTexture, stepTexture, metalTexture, floorSignTexture,
   glitchSignTexture, fireDoorTexture, roofDoorTexture, startWallTexture,
   IndicatorTexture, paperTexture, glowTexture, exitSignTexture, normalMapFrom, roughnessMapFrom, callButtonTexture,
+  stainlessTexture, carWallTexture, copTexture, cautionStickerTexture, capacityPlateTexture, carFloorTexture,
+  carCeilingTexture, sillTexture,
 } from './textures.js';
 
 export let TOP_Y = 0;
@@ -81,7 +83,10 @@ export function buildWorld(scene) {
     step: stepTexture(),
     metal: metalTexture(),
     glow: glowTexture(),
+    steel: stainlessTexture(21, true, 168),
+    sill: sillTexture(),
   };
+  tex.sill.repeat.set(3, 1);
   tex.roomWall.repeat.set(2, 1);
   // 노멀맵/거칠기맵: 타일 줄눈이 움푹하고 타일 면은 광택이 돈다
   const nrm = {
@@ -93,6 +98,7 @@ export function buildWorld(scene) {
     roomWall: normalMapFrom(tex.roomWall, 2.5),
     step: normalMapFrom(tex.step, 3),
     metal: normalMapFrom(tex.metal, 1.2),
+    steel: normalMapFrom(tex.steel, 0.5),
   };
   tex.normals = nrm;
   const ns = (v) => new THREE.Vector2(v, v);
@@ -108,6 +114,11 @@ export function buildWorld(scene) {
     rail: new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.45, metalness: 0.7 }),
     metal: new THREE.MeshStandardMaterial({ map: tex.metal, normalMap: nrm.metal, normalScale: ns(0.4), roughness: 0.38, metalness: 0.85 }),
     frame: new THREE.MeshStandardMaterial({ color: 0x3b3c3e, roughness: 0.5, metalness: 0.7 }),
+    // 헤어라인 스테인리스 (반사용 envMap 은 main 에서 렌더러로 만들어 붙인다)
+    steel: new THREE.MeshStandardMaterial({ map: tex.steel, normalMap: nrm.steel, normalScale: ns(0.2), roughness: 0.28, metalness: 0.9, envMapIntensity: 0.3 }),
+    sill: new THREE.MeshStandardMaterial({ map: tex.sill, roughness: 0.45, metalness: 0.8, envMapIntensity: 0.3 }),
+    rubber: new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.8 }),
+    sticker: new THREE.MeshStandardMaterial({ map: cautionStickerTexture(), roughness: 0.55 }),
     car: new THREE.MeshStandardMaterial({ map: tex.metal, color: 0x6a6a6a, roughness: 0.4, metalness: 0.6, side: THREE.BackSide }),
     wood: new THREE.MeshStandardMaterial({ color: 0x4a3f33, roughness: 0.9 }),
     cardboard: new THREE.MeshStandardMaterial({ color: 0x5a5046, roughness: 1 }),
@@ -315,7 +326,7 @@ export function buildWorld(scene) {
   const indicator = new IndicatorTexture();
   const indicatorMat = new THREE.MeshBasicMaterial({ map: indicator.texture, toneMapped: false });
   indicatorMat.color.setScalar(1.7);
-  mat.panel = new THREE.MeshStandardMaterial({ map: tex.metal, normalMap: tex.normals.metal, normalScale: new THREE.Vector2(0.3, 0.3), color: 0xd0d2d4, roughness: 0.3, metalness: 0.9 });
+  mat.panel = mat.steel; // 승강장 패널도 문과 같은 헤어라인 스테인리스
   mat.callTex = [callButtonTexture(1), callButtonTexture(-1)];
   const doorMats = {
     front: new THREE.MeshStandardMaterial({ map: fireDoorTexture(), roughness: 0.7, metalness: 0.3 }),
@@ -385,19 +396,46 @@ function buildElevator(root, mat, indicatorMat, k) {
   const g = new THREE.Group();
   faceCenter(g, R_OUT, DOOR_ANGLE, y);
   const hw = DOOR_HALF_W;
-  const postGeo = new THREE.BoxGeometry(0.12, 2.42, 0.16);
-  const pl = new THREE.Mesh(postGeo, mat.frame);
-  pl.position.set(-hw, 1.21, 0.02);
+  const H = 2.28; // 문 높이
+  // 스테인리스 문틀: 양옆 기둥 + 위 머리판(조금 두툼하게), 벽면보다 살짝 튀어나옴
+  const jambW = 0.09, jambD = 0.05;
+  const pl = new THREE.Mesh(new THREE.BoxGeometry(jambW, H + 0.2, jambD), mat.steel);
+  pl.position.set(-hw - jambW / 2, (H + 0.2) / 2, jambD / 2);
   const pr = pl.clone();
-  pr.position.x = hw;
-  const lintel = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.24, 0.16, 0.16), mat.frame);
-  lintel.position.set(0, 2.38, 0.02);
-  const panelGeo = new THREE.BoxGeometry(hw, 2.28, 0.04);
-  const left = new THREE.Mesh(panelGeo, mat.metal);
-  const right = new THREE.Mesh(panelGeo, mat.metal);
-  left.position.set(-hw / 2, 1.14, -0.02);
-  right.position.set(hw / 2, 1.14, -0.02);
-  for (const m of [pl, pr, lintel, left, right]) { m.castShadow = true; m.receiveShadow = true; }
+  pr.position.x = hw + jambW / 2;
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + jambW * 2, 0.2, jambD), mat.steel);
+  lintel.position.set(0, H + 0.1, jambD / 2);
+  // 개구부 안쪽 면(리턴): 문틀이 벽 두께만큼 꺾여 들어간다
+  const returns = new THREE.Group();
+  for (const sx of [-1, 1]) {
+    const rt = new THREE.Mesh(new THREE.PlaneGeometry(0.16, H), mat.steel);
+    rt.rotation.y = -sx * Math.PI / 2;
+    rt.position.set(sx * hw, H / 2, -0.08);
+    returns.add(rt);
+  }
+  const rtTop = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, 0.16), mat.steel);
+  rtTop.rotation.x = Math.PI / 2;
+  rtTop.position.set(0, H, -0.08);
+  returns.add(rtTop);
+  // 문턱: 홈이 파인 알루미늄
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.06, 0.02, 0.2), mat.sill);
+  sill.position.set(0, 0.01, -0.02);
+  // 문짝: 헤어라인 스테인리스 + 가운데 고무 패킹 + '손 끼임 주의' 스티커 (문과 함께 움직인다)
+  const panelGeo = new THREE.BoxGeometry(hw, H, 0.035);
+  const left = new THREE.Mesh(panelGeo, mat.steel);
+  const right = new THREE.Mesh(panelGeo, mat.steel);
+  left.position.set(-hw / 2, H / 2, -0.03);
+  right.position.set(hw / 2, H / 2, -0.03);
+  const sealGeo = new THREE.BoxGeometry(0.008, H - 0.02, 0.037);
+  const stickerGeo = new THREE.PlaneGeometry(0.085, 0.106);
+  for (const [panel, side] of [[left, 1], [right, -1]]) {
+    const seal = new THREE.Mesh(sealGeo, mat.rubber);
+    seal.position.set(side * (hw / 2 - 0.004), 0, 0);
+    const st = new THREE.Mesh(stickerGeo, mat.sticker);
+    st.position.set(side * (hw / 2 - 0.11), 1.05 - H / 2, 0.0185);
+    panel.add(seal, st);
+  }
+  for (const m of [pl, pr, lintel, left, right, sill]) { m.castShadow = true; m.receiveShadow = true; }
 
   // 문 오른쪽 승강장 패널: 스테인리스 판 + 빨간 LED 표시기 + ▲▼ 호출 버튼
   const px = hw + 0.36;
@@ -455,7 +493,7 @@ function buildElevator(root, mat, indicatorMat, k) {
     pressed.face.position.z = pressed.fz0 - depth;
   };
 
-  g.add(pl, pr, lintel, left, right);
+  g.add(pl, pr, lintel, returns, sill, left, right);
   root.add(g);
   g.updateMatrixWorld(true);
   return {
@@ -469,13 +507,20 @@ function buildElevator(root, mat, indicatorMat, k) {
 export function buildCar(root, mat) {
   const g = new THREE.Group();
   faceCenter(g, R_OUT, DOOR_ANGLE, 0);
-  const inner = new THREE.MeshStandardMaterial({ map: mat.metal.map, color: 0xb9bcbf, roughness: 0.32, metalness: 0.55, side: THREE.BackSide, emissive: 0x2a2c2e });
+  // 칸 안: 이음매로 나뉜 스테인리스 벽 (밝은 실내), 뒷벽 위쪽은 거울처럼 매끈한 판
+  const wallTex = carWallTexture();
+  const steelIn = new THREE.MeshStandardMaterial({
+    map: wallTex, roughness: 0.3, metalness: 0.85, envMapIntensity: 0.9, side: THREE.BackSide, emissive: 0x1d1f22,
+  });
+  mat.carSteel = steelIn;
   // 앞면(+z, 승강장 쪽)은 비워 두고 문 구멍이 난 앞벽을 따로 세운다 — 문이 열리면 바깥 계단참이 보이도록
   const hidden = new THREE.MeshBasicMaterial({ visible: false });
-  const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 1.5), [inner, inner, inner, inner, hidden, inner]);
+  const ceilMat = new THREE.MeshStandardMaterial({ color: 0x2b2d30, roughness: 0.6, metalness: 0.5, side: THREE.BackSide });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 1.5), [steelIn, steelIn, ceilMat, hidden, hidden, steelIn]);
   box.position.set(0, 1.2, -0.8);
   box.receiveShadow = true;
-  const front = new THREE.MeshStandardMaterial({ map: mat.metal.map, color: 0xb9bcbf, roughness: 0.32, metalness: 0.55, emissive: 0x2a2c2e });
+  const front = new THREE.MeshStandardMaterial({ map: mat.steel.map, normalMap: mat.steel.normalMap, roughness: 0.3, metalness: 0.85, envMapIntensity: 0.9, emissive: 0x1d1f22 });
+  mat.carFront = front;
   const sideW = 0.75 - DOOR_HALF_W;
   for (const sx of [-1, 1]) {
     const jamb = new THREE.Mesh(new THREE.PlaneGeometry(sideW, 2.4), front);
@@ -487,43 +532,86 @@ export function buildCar(root, mat) {
   header.rotation.y = Math.PI;
   header.position.set(0, (2.4 + HOLE_H) / 2, -0.05);
   g.add(header);
-  // 바닥 (어두운 고무 매트)
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(1.46, 1.46), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 }));
+  // 뒷벽 거울 (매끈한 스테인리스, 가장자리 틀)
+  const mirrorMat = new THREE.MeshStandardMaterial({ color: 0xdfe3e8, roughness: 0.06, metalness: 1, envMapIntensity: 1.2 });
+  mat.carMirror = mirrorMat;
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.15), mirrorMat);
+  mirror.position.set(0, 1.55, -1.545);
+  const mFrame = new THREE.Mesh(new THREE.BoxGeometry(1.16, 1.21, 0.01), new THREE.MeshStandardMaterial({ color: 0x3a3c40, roughness: 0.4, metalness: 0.8 }));
+  mFrame.position.set(0, 1.55, -1.551);
+  // 바닥 (짙은 화강석 타일)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshStandardMaterial({ map: carFloorTexture(), roughness: 0.35, metalness: 0.1 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0.005, -0.8);
-  // 천장 조명 패널 (환하게)
-  const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  // 천장: 격자 틀 안의 LED 판 (환하게)
+  const lightMat = new THREE.MeshBasicMaterial({ map: carCeilingTexture() });
   lightMat.color.setScalar(2.4);
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), lightMat);
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), lightMat);
   panel.rotation.x = Math.PI / 2;
   panel.position.set(0, 2.39, -0.8);
-  // 손잡이 레일
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 1.3), mat.metal);
-  rail.position.set(0.72, 0.95, -0.8);
-  const rail2 = rail.clone();
-  rail2.position.x = -0.72;
-  // 내부 버튼 패널 (고장)
-  const cp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.2), mat.frame);
-  cp.position.set(0.735, 1.25, -0.3);
-  const btnGeo = new THREE.CircleGeometry(0.018, 10);
+  // 손잡이: 양옆 + 뒤, 둥근 스테인리스 파이프와 받침
+  const railMat = new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.18, metalness: 1, envMapIntensity: 1 });
+  mat.carRail = railMat;
+  const rails = new THREE.Group();
+  const pipe = (len, x, z, ry) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, len, 12), railMat);
+    m.rotation.set(Math.PI / 2, 0, 0);
+    const holder = new THREE.Group();
+    holder.add(m);
+    holder.position.set(x, 0.92, z);
+    holder.rotation.y = ry;
+    for (const e of [-len / 2 + 0.06, len / 2 - 0.06]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.06, 6), railMat);
+      post.rotation.x = Math.PI / 2;
+      post.position.set(0, 0, e);
+      const arm = new THREE.Group();
+      arm.add(post);
+      arm.rotation.y = Math.PI / 2;
+      arm.position.set(0, 0, e);
+      holder.add(arm);
+    }
+    rails.add(holder);
+  };
+  pipe(1.2, 0.69, -0.85, 0);
+  pipe(1.2, -0.69, -0.85, 0);
+  pipe(1.1, 0, -1.49, Math.PI / 2);
+  // 조작반 (오른쪽 앞): 층 버튼·열림/닫힘·비상 호출이 그려진 스테인리스 판 + 작은 표시창
+  const cop = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.78), new THREE.MeshStandardMaterial({
+    map: copTexture(FLOORS), roughness: 0.32, metalness: 0.7, envMapIntensity: 0.8, emissive: 0x1a1a1a,
+  }));
+  cop.rotation.y = -Math.PI / 2;
+  cop.position.set(0.744, 1.18, -0.32);
   const btnMat = new THREE.MeshBasicMaterial({ color: 0x3a3a2a });
-  for (let i = 0; i < 6; i++) {
-    const b = new THREE.Mesh(btnGeo, btnMat);
-    b.position.set(0.719, 1.12 + Math.floor(i / 2) * 0.09, -0.34 + (i % 2) * 0.08);
-    b.rotation.y = -Math.PI / 2;
-    g.add(b);
-  }
-  // 칸 자체의 안쪽 문 (승강장 문과 함께 열림)
+  const display = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.05), btnMat); // 고장난 표시창 (누르면 깜빡)
+  display.rotation.y = -Math.PI / 2;
+  display.position.set(0.742, 1.18 + 0.39 - 0.07, -0.32);
+  // 정원 표지판
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshStandardMaterial({ map: capacityPlateTexture(), roughness: 0.5 }));
+  plate.rotation.y = -Math.PI / 2;
+  plate.position.set(0.744, 1.75, -0.32);
+  // 천장 모서리의 돔 카메라
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.1, metalness: 0.4 }));
+  dome.rotation.x = Math.PI;
+  dome.position.set(-0.62, 2.38, -1.42);
+  // 칸 자체의 안쪽 문 (승강장 문과 함께 열림): 같은 스테인리스 + 가운데 고무 패킹
   const doorGeo = new THREE.BoxGeometry(0.6, 2.28, 0.03);
-  const left = new THREE.Mesh(doorGeo, mat.metal);
-  const right = new THREE.Mesh(doorGeo, mat.metal);
+  const left = new THREE.Mesh(doorGeo, front);
+  const right = new THREE.Mesh(doorGeo, front);
   left.position.set(-0.3, 1.14, -0.09);
   right.position.set(0.3, 1.14, -0.09);
+  for (const [d, side] of [[left, 1], [right, -1]]) {
+    const seal = new THREE.Mesh(new THREE.BoxGeometry(0.008, 2.26, 0.032), mat.rubber);
+    seal.position.set(side * 0.296, 0, 0);
+    d.add(seal);
+  }
+  // 문턱
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.02, 0.12), mat.sill);
+  sill.position.set(0, 0.01, -0.1);
   const light = new THREE.PointLight(0xf2f6ff, 0, 5, 1.4);
   light.position.set(0, 2.1, -0.8);
-  g.add(box, floor, panel, rail, rail2, cp, left, right, light);
+  g.add(box, floor, panel, mirror, mFrame, rails, cop, display, plate, dome, sill, left, right, light);
   root.add(g);
-  return { group: g, left, right, light, lightMat, btnMat, panelLocal: new THREE.Vector3(0.72, 1.25, -0.3) };
+  return { group: g, left, right, light, lightMat, btnMat, panelLocal: new THREE.Vector3(0.72, 1.2, -0.32) };
 }
 
 /** 비상문 + 그 뒤의 복도와 방 (숨을 수 있는 공간) */
