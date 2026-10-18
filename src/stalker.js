@@ -253,6 +253,13 @@ export class Stalker {
     if (player.inCar) return;                                                         // 엘리베이터 안 = 모른다
     if (player.inRoom && this.game.world.fireDoors[player.roomK].open < 0.3) return;  // 문 닫고 숨으면 모른다
     if (this.state === 'trapWait' || this.state === 'chase') return;
+    // 엘리베이터에 타서 문이 닫히는 순간부터, 다시 문이 열려 걸어 나올 때까지는 바깥을 전혀 느끼지 못한다
+    // (막 탄 직후 플레이어가 비상실에서 나와도 들키지 않도록)
+    if (this.state === 'arriving') return;
+    if (this.state === 'elevator') {
+      const el = this.game.elevator;
+      if (!el.isOpenAt(Math.round(el.floor))) return;
+    }
     const src = this.state === 'elevator' ? this.humPos : this.pos;
     const py = player.footY + 1;
     const d = Math.hypot(src.x - player.x, src.y - py, src.z - player.z);
@@ -495,13 +502,6 @@ export class Stalker {
           if (this.elevTarget === null || this.elevTarget === undefined) this.elevTarget = this.pickElevatorTarget(player);
           this.rideSent = true;
           el.send(this.elevTarget);
-        } else if (!this.hunting && ai.predict >= 0.7 && this.belief.fresh > 0) {
-          // (하드 이상) 가는 도중에 소리가 들리면 행선지를 바꾼다
-          const bf = this.beliefFloor();
-          if (bf !== null && Math.abs(bf + 1 - this.elevTarget) >= 2) {
-            this.elevTarget = Math.min(FLOORS - 1, bf + 1);
-            el.send(this.elevTarget);
-          }
         }
         break;
       }

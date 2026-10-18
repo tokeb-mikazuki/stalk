@@ -262,19 +262,44 @@ export function paperTexture(seed) {
   return toTexture(c, false);
 }
 
+// 엘리베이터 표시기용 도트 글꼴 (7×13, 2도트 굵기 — 실제 승강장 LED 처럼)
+const LED_GLYPHS = {
+  0: ['.#####.', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '.#####.'],
+  1: ['...##..', '..###..', '.####..', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '.######'],
+  2: ['.#####.', '##...##', '.....##', '.....##', '.....##', '....##.', '...##..', '..##...', '.##....', '##.....', '##.....', '##.....', '#######'],
+  3: ['.#####.', '##...##', '.....##', '.....##', '.....##', '..####.', '.....##', '.....##', '.....##', '.....##', '.....##', '##...##', '.#####.'],
+  4: ['....##.', '...###.', '..####.', '.##.##.', '##..##.', '##..##.', '#######', '....##.', '....##.', '....##.', '....##.', '....##.', '....##.'],
+  5: ['#######', '##.....', '##.....', '##.....', '######.', '.....##', '.....##', '.....##', '.....##', '.....##', '.....##', '##...##', '.#####.'],
+  6: ['..####.', '.##....', '##.....', '##.....', '##.....', '######.', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '.#####.'],
+  7: ['#######', '.....##', '.....##', '....##.', '....##.', '...##..', '...##..', '..##...', '..##...', '..##...', '..##...', '..##...', '..##...'],
+  8: ['.#####.', '##...##', '##...##', '##...##', '##...##', '.#####.', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '.#####.'],
+  9: ['.#####.', '##...##', '##...##', '##...##', '##...##', '##...##', '.######', '.....##', '.....##', '.....##', '.....##', '....##.', '.####..'],
+  '-': ['.......', '.......', '.......', '.......', '.......', '.#####.', '.#####.', '.......', '.......', '.......', '.......', '.......', '.......'],
+};
+const LED_ARROW_UP = ['....#....', '...###...', '..#####..', '.#######.', '#########', '...###...', '...###...', '...###...', '...###...'];
+const LED_COLS = 21, LED_ROWS = 30;
+
 /** 모든 층 승강장 패널이 공유하는 빨간 LED 도트 표시기 (방향 화살표 + 층수) */
 export class IndicatorTexture {
   constructor() {
     const [c, ctx] = canvas(120, 180);
     this.canvas = c;
     this.ctx = ctx;
-    // 저해상도 격자에 그린 뒤 LED 점으로 옮긴다
-    const [g, gctx] = canvas(20, 30);
-    this.grid = g;
-    this.gctx = gctx;
+    this.dots = new Uint8Array(LED_COLS * LED_ROWS);
     this.texture = toTexture(c, false);
     this.last = '';
     this.draw('1', 0, false, false);
+  }
+
+  /** 도트 글꼴 한 글자를 (x0, y0) 에 찍는다 */
+  stamp(rows, x0, y0, flipY = false) {
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[flipY ? rows.length - 1 - r : r];
+      for (let c = 0; c < row.length; c++) {
+        const x = x0 + c, y = y0 + r;
+        if (row[c] === '#' && x >= 0 && x < LED_COLS && y >= 0 && y < LED_ROWS) this.dots[y * LED_COLS + x] = 1;
+      }
+    }
   }
 
   /** dir: 1 위, -1 아래, 0 정지 */
@@ -282,37 +307,29 @@ export class IndicatorTexture {
     const key = `${text}|${dir}|${err}|${red}`;
     if (key === this.last) return;
     this.last = key;
-    const g = this.gctx;
-    g.clearRect(0, 0, 20, 30);
-    g.fillStyle = '#fff';
-    // 화살표 (위쪽 0~11행)
-    if (dir !== 0) {
-      g.beginPath();
-      if (dir > 0) {
-        g.moveTo(10, 1); g.lineTo(15.5, 6.5); g.lineTo(12, 6.5); g.lineTo(12, 11); g.lineTo(8, 11); g.lineTo(8, 6.5); g.lineTo(4.5, 6.5);
-      } else {
-        g.moveTo(10, 11); g.lineTo(15.5, 5.5); g.lineTo(12, 5.5); g.lineTo(12, 1); g.lineTo(8, 1); g.lineTo(8, 5.5); g.lineTo(4.5, 5.5);
-      }
-      g.closePath();
-      g.fill();
+    this.dots.fill(0);
+    // 화살표 (위쪽 1~9행)
+    if (dir !== 0) this.stamp(LED_ARROW_UP, 6, 1, dir < 0);
+    // 층수 (아래쪽 14~26행) — 7도트 글자, 글자 사이 2도트
+    const chars = [...(err ? '--' : text)].filter((ch) => LED_GLYPHS[ch]);
+    const w = chars.length * 7 + (chars.length - 1) * 2;
+    let x = Math.floor((LED_COLS - w) / 2);
+    for (const ch of chars) {
+      this.stamp(LED_GLYPHS[ch], x, 14);
+      x += 9;
     }
-    // 층수 (아래쪽 13~28행)
-    g.font = `bold ${text.length > 1 ? 13 : 15}px "Arial Narrow", Arial, sans-serif`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(err ? '--' : text, 10, 21.5);
-    const px = g.getImageData(0, 0, 20, 30).data;
 
     const ctx = this.ctx;
     ctx.fillStyle = '#060404';
     ctx.fillRect(0, 0, 120, 180);
     const on = red ? '#ff2a1a' : '#ff3b26';
-    for (let y = 0; y < 30; y++) {
-      for (let x = 0; x < 20; x++) {
-        const lit = px[(y * 20 + x) * 4 + 3] > 110;
+    const sx = 120 / LED_COLS, sy = 180 / LED_ROWS;
+    for (let y = 0; y < LED_ROWS; y++) {
+      for (let x2 = 0; x2 < LED_COLS; x2++) {
+        const lit = this.dots[y * LED_COLS + x2] === 1;
         ctx.fillStyle = lit ? on : '#1c0806';
         ctx.beginPath();
-        ctx.arc(3 + x * 6, 3 + y * 6, lit ? 2.5 : 2, 0, Math.PI * 2);
+        ctx.arc(sx * (x2 + 0.5), sy * (y + 0.5), lit ? 2.4 : 1.9, 0, Math.PI * 2);
         ctx.fill();
       }
     }
