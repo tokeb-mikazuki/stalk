@@ -1514,7 +1514,6 @@ class Game {
       document.getElementById('dead-sub').textContent = subs[Math.floor(Math.random() * subs.length)];
       document.body.classList.add('menu-on');
       this.hud.screen('dead');
-      this.say('dead', { voiceOnly: true });
     }
   }
 

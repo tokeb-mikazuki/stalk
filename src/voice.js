@@ -16,7 +16,6 @@ import vPause from '../assets/voice/pause.mp3';
 import vAtDoor from '../assets/voice/atDoor.mp3';
 import vCarPanel from '../assets/voice/carpanel.mp3';
 import vWin from '../assets/voice/win.mp3';
-import vDead from '../assets/voice/dead.mp3';
 
 export const VOICE = {
   'intro-goal': { say: '안내 말씀 드립니다. 옥상 문은 맨 위층에 있습니다. 벽에 적힌 층 번호를 확인하십시오.', rate: '-8%', pitch: '-2Hz',
@@ -38,7 +37,6 @@ export const VOICE = {
   'carpanel': { say: '이 엘리베이터는, 원하시는 층으로 가지 않습니다.', rate: '-12%', pitch: '-5Hz',
     text: '버튼이 고장나 있다. — 이 엘리베이터는, 원하시는 층으로 가지 않습니다.', style: 'close', url: vCarPanel },
   'win': { say: '송신아파트 비상계단을 이용해 주셔서 감사합니다.', rate: '-10%', pitch: '-2Hz', style: 'pa', chime: true, url: vWin },
-  'dead': { say: '처음부터, 다시 오르십시오.', rate: '-20%', pitch: '-8Hz', style: 'close', url: vDead },
 };
 
 export function voiceText(id, floors) {
