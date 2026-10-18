@@ -36,6 +36,7 @@ export class AutoPilot {
     this.fleeT = 0;
     this.fleeDir = 1;
     this.status = '';
+    this.cam = { phase: 'walk', t: 0, say: '', where: '' };
   }
 
   set(s, why = '') {
@@ -43,6 +44,7 @@ export class AutoPilot {
     this.stateT = 0;
     this.quietT = 0;
     this.status = why;
+    if (s === 'hide') this.cam = { phase: 'walk', t: 0, say: '', where: '' };
   }
 
   /** 월드 (x,z) 쪽으로 몸을 돌리고 간다. mode: walk | run | sneak */
@@ -102,7 +104,7 @@ export class AutoPilot {
     this.stateT += dt;
     this.stop();
     if (p.torchOn && !g.cctv) p.toggleTorch(); // 어둠 속에서 조용히 — 불빛은 멀리서도 보인다
-    if (g.cctv) g.closeCctv();
+    if (g.cctv && this.state !== 'hide') g.closeCctv();
     if (g.hud.noteOpen) g.hud.hideNote();
     const L = this.look();
     const top = doors.length - 1;
@@ -289,17 +291,30 @@ export class AutoPilot {
 
       case 'hide': {
         const s = g.stalker;
-        p.pitch *= 0.8;
         // 피구공이 가까이 있거나(계단·문 앞·같은 층 엘리베이터), 이 층으로 오는 중이면 기다린다
         const busy = (L.seen && L.d < 30) || s.state === 'search' || s.state === 'chase' || L.carHere || s.state === 'arriving' || s.state === 'trapWait';
         this.quietT = busy ? 0 : this.quietT + dt;
         const limit = g.diff.hideThreshold - 4;
+        const watched = this.watchCctv(dt); // 모니터 앞에서 CCTV 를 본다
+        const leave = (why) => {
+          g.closeCctv();
+          return this.set('exitRoom', why);
+        };
         // 체류 한계가 다가와도 피구공이 문밖 가까이 있으면 나가지 않는다 (문 앞을 막고 있는 동안은 체류 시간이 흐르지 않는다)
         const outside = L.seen && (L.d < 7 || L.raw < 8);
-        if (p.floorTime > limit && !outside) return this.set('exitRoom', '더 머물면 들킨다 — 잠깐 층을 바꾼다');
-        if (s.hunting && !L.seen) return this.set('exitRoom', 'FOUND YOU — 문을 부수러 온다, 층을 바꾼다');
-        if (this.quietT > 1.2 && this.stateT > 2) return this.set('exitRoom', '피구공이 떠났다');
-        this.status = busy ? `숨죽이는 중 (피구공이 근처에, ${Math.max(0, limit - p.floorTime).toFixed(0)}초 여유)` : '조용해지기를 기다리는 중';
+        if (p.floorTime > limit && !outside) return leave('더 머물면 들킨다 — 잠깐 층을 바꾼다');
+        if (s.hunting && !L.seen) return leave('FOUND YOU — 문을 부수러 온다, 층을 바꾼다');
+        // 조용하면 나간다 — 시간 여유가 있으면 CCTV 를 한 바퀴 둘러본 뒤에
+        const spare = limit - p.floorTime > 7;
+        // CCTV 에 피구공이 바로 위 1~2층(곧 지나갈 길)에 보이면, 여유가 있는 동안은 지나가기를 기다린다
+        const ahead = (this.cam.near || []).some((k) => k > p.roomK && k <= p.roomK + 2);
+        if (ahead && spare && g.cctv) {
+          this.status = `CCTV: 위층(${this.cam.where})에 피구공 — 지나가기를 기다린다 · ${Math.max(0, limit - p.floorTime).toFixed(0)}초 여유`;
+          return;
+        }
+        if (this.quietT > 1.2 && this.stateT > 2 && (watched || !spare)) return leave(this.cam.where ? `CCTV: 피구공은 ${this.cam.where} — 지금 나간다` : 'CCTV: 아무도 없다 — 나간다');
+        const left = Math.max(0, limit - p.floorTime).toFixed(0);
+        this.status = (this.cam.say || (busy ? '숨죽이는 중 (피구공이 근처에)' : '조용해지기를 기다리는 중')) + ` · ${left}초 여유`;
         return;
       }
 
@@ -371,6 +386,83 @@ export class AutoPilot {
       case 'done':
         return;
     }
+  }
+
+  /**
+   * 숨어 있는 동안 CCTV 보기: 모니터 앞으로 가서 켜고 → 이 층 문 앞 → 전체 층 화면에서 움직임을 찾고 →
+   * 움직임이 있는 층을 크게 본다. 한 바퀴 다 봤으면 true.
+   */
+  watchCctv(dt) {
+    const g = this.g, p = g.player;
+    const door = g.world.fireDoors[p.roomK];
+    const cam = this.cam;
+    if (!door) return true;
+    if (!g.cctv) {
+      if (cam.phase === 'done') return true;
+      // 모니터 앞으로 걸어가 화면을 바라본다
+      const mp = door.monitorPos;
+      const d = this.steer(mp.x, mp.z, 'walk');
+      if (d < 1.7 || (this.stateT > 3 && d < 2.1)) { // 책상 앞 — 손이 닿는 거리
+        this.stop();
+        p.yaw = Math.atan2(-(mp.x - p.x), -(mp.z - p.z));
+        p.pitch = -0.12;
+        g.openCctv(door);
+        cam.phase = 'here';
+        cam.t = 0;
+        cam.say = 'CCTV를 켰다 — 이 층 문 앞';
+      } else cam.say = 'CCTV 모니터 앞으로';
+      return false;
+    }
+    const c = g.cctv;
+    const n = g.world.fireDoors.length;
+    cam.t += dt;
+    const near = [];
+    for (let k = 0; k < n; k++) if (g.cctvSees(k)) near.push(k);
+    cam.where = near.length ? near.map((k) => `${k + 1}F`).join('·') : '';
+    cam.near = near;
+    switch (cam.phase) {
+      case 'here':
+        cam.say = g.cctvSees(door.k) ? 'CCTV: 문 앞에 피구공이 있다…' : 'CCTV: 이 층 문 앞 — 아무도 없다';
+        if (cam.t > 2.2) {
+          g.cctvToggle(); // 전체 층
+          cam.phase = 'grid';
+          cam.t = 0;
+        }
+        break;
+      case 'grid':
+        cam.say = near.length ? `CCTV 전체 층: ${cam.where}에 움직임` : 'CCTV 전체 층: 움직임 없음';
+        if (cam.t > 2.6) {
+          if (near.length) {
+            // 움직임이 있는 층을 크게
+            c.sel = near[0];
+            g.cctvToggle();
+            cam.phase = 'zoom';
+          } else {
+            g.cctvToggle();
+            if (c.k !== door.k) g.cctvStep(door.k - c.k);
+            cam.phase = 'back';
+          }
+          cam.t = 0;
+        }
+        break;
+      case 'zoom':
+        cam.say = `CCTV ${c.k + 1}F: ${g.cctvSees(c.k) ? '피구공이 보인다' : '방금 지나갔다'}`;
+        if (cam.t > 2.2) {
+          if (c.k !== door.k) g.cctvStep(door.k - c.k);
+          cam.phase = 'back';
+          cam.t = 0;
+        }
+        break;
+      case 'back':
+        cam.say = g.cctvSees(door.k) ? 'CCTV: 문 앞에 피구공이 있다…' : 'CCTV: 이 층 문 앞을 지켜보는 중';
+        if (cam.t > 3) {
+          g.cctvToggle();
+          cam.phase = 'grid';
+          cam.t = 0;
+        }
+        return true;
+    }
+    return false;
   }
 
   goHide(k, mode, why) {
