@@ -412,9 +412,23 @@ export function buildCar(root, mat) {
   const g = new THREE.Group();
   faceCenter(g, R_OUT, DOOR_ANGLE, 0);
   const inner = new THREE.MeshStandardMaterial({ map: mat.metal.map, color: 0xb9bcbf, roughness: 0.32, metalness: 0.55, side: THREE.BackSide, emissive: 0x2a2c2e });
-  const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 1.5), inner);
+  // 앞면(+z, 승강장 쪽)은 비워 두고 문 구멍이 난 앞벽을 따로 세운다 — 문이 열리면 바깥 계단참이 보이도록
+  const hidden = new THREE.MeshBasicMaterial({ visible: false });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 1.5), [inner, inner, inner, inner, hidden, inner]);
   box.position.set(0, 1.2, -0.8);
   box.receiveShadow = true;
+  const front = new THREE.MeshStandardMaterial({ map: mat.metal.map, color: 0xb9bcbf, roughness: 0.32, metalness: 0.55, emissive: 0x2a2c2e });
+  const sideW = 0.75 - DOOR_HALF_W;
+  for (const sx of [-1, 1]) {
+    const jamb = new THREE.Mesh(new THREE.PlaneGeometry(sideW, 2.4), front);
+    jamb.rotation.y = Math.PI; // 칸 안쪽을 바라봄
+    jamb.position.set(sx * (DOOR_HALF_W + sideW / 2), 1.2, -0.05);
+    g.add(jamb);
+  }
+  const header = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.4 - HOLE_H), front);
+  header.rotation.y = Math.PI;
+  header.position.set(0, (2.4 + HOLE_H) / 2, -0.05);
+  g.add(header);
   // 바닥 (어두운 고무 매트)
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(1.46, 1.46), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 }));
   floor.rotation.x = -Math.PI / 2;
@@ -590,6 +604,7 @@ function buildFireRoom(root, mat, doorMats, k, rand, lamps) {
     lamp: roomLamp,
     screen, screenMat, recMat,
     monitorPos: g.localToWorld(new THREE.Vector3(ROOM_X1 - 0.08, 1.5, monZ)),
+    tablePos: g.localToWorld(new THREE.Vector3(ROOM_X1 - 0.2, 0.73, monZ - 0.18)), // 모니터 책상 위 (배터리 비치)
     cctvPos: g.localToWorld(new THREE.Vector3(-hw - 0.3, HOLE_H + 0.32, 0.32)),
     cctvTarget: g.localToWorld(new THREE.Vector3(1.3, 0.55, 2.4)),
   };

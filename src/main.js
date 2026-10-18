@@ -654,16 +654,23 @@ class Game {
       return k * FLOOR_PHI + 0.95;
     };
     for (let i = 0; i < NOTES.length; i++) this.addItem('note', slot(NOTES[i].k), i);
+    // 계단에 떨어진 배터리 (드물게)
     const floors = new Set();
     while (floors.size < this.diff.batteries) floors.add(1 + Math.floor(Math.random() * (FLOORS - 2)));
     for (const k of floors) this.addItem('battery', slot(k));
+    // 열린 비상실(CCTV 룸) 모니터 책상 위에 비치된 배터리
+    for (const d of this.world.fireDoors) {
+      if (!d.locked && Math.random() < this.diff.roomBatteries) this.addItem('battery', fireDoorPhi(d.k), 0, d.tablePos);
+    }
   }
 
-  addItem(type, phi, idx = 0) {
-    const y = baseY(phi);
+  /** at: 지정 위치(비상실 책상 위 등). 없으면 계단참 phi 위 */
+  addItem(type, phi, idx = 0, at = null) {
+    const y = at ? at.y : baseY(phi);
     const r = R_MID + 0.3;
     const g = new THREE.Group();
-    polar(r, phi, y, g.position);
+    if (at) g.position.copy(at);
+    else polar(r, phi, y, g.position);
     let mesh;
     if (type === 'battery') {
       const m = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.4, metalness: 0.6, emissive: 0x112211 });
@@ -1322,11 +1329,16 @@ class Game {
     if (this.trap) {
       p.rideCar(this.elevator.floor, FLOOR_H);
       if (this.elevator.moving) this.player.shake = Math.max(this.player.shake, 0.12);
-      // 문이 열리면 송신이 바로 앞에 서 있다
-      if (this.elevator.doorK === this.trap.T && this.world.elevators[this.trap.T].open > 0.35) {
-        this.progress.unlock('trap');
-        this.die();
-        return;
+      // 문이 열리면 송신이 바로 앞 계단참에 서 있다 — 잠깐 마주 본 뒤 덮친다
+      if (this.elevator.doorK === this.trap.T && this.world.elevators[this.trap.T].open > 0.2) {
+        p.frozen = true;
+        this.elevator.hold(2);
+        this.trap.reveal = (this.trap.reveal || 0) + dt;
+        if (this.trap.reveal > 1.1) {
+          this.progress.unlock('trap');
+          this.die();
+          return;
+        }
       }
     }
     s.update(dt, p, this);
@@ -1632,6 +1644,7 @@ const LOADING_TIPS = [
   '달리면 빠르지만, 발소리는 계단 전체에 울린다.',
   '손전등 빛은 멀리서도 보인다. 하지만 끄면 아무것도 보이지 않는다.',
   '체력이 바닥난 채로 달리면 넘어진다.',
+  '배터리는 계단보다 비상실 모니터 책상 위에서 찾기 쉽다.',
   '위로 올라갈수록 송신은 더 예민해진다.',
   '일시정지 뒤에 오래 숨어 있지 마라.',
   '엘리베이터를 다른 층으로 불러 두면, 송신은 한참을 기다려야 한다.',

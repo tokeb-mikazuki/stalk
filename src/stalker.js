@@ -370,7 +370,7 @@ export class Stalker {
     this.huntQueued = false;
     this.roomK = -1;
     this.phi = k * FLOOR_PHI + DOOR_ANGLE;
-    this.r = R_OUT - 0.32;
+    this.r = R_OUT - 1.0; // 문이 열리면 문틀 너머 계단참에 서 있는 전신이 보이도록 한 걸음 물러서
     this.yaw = Math.atan2(Math.cos(this.phi), Math.sin(this.phi)); // 엘리베이터 문을 바라봄
     this.visible = true;
     this.doorK = k;

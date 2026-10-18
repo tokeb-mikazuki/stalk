@@ -389,8 +389,10 @@ export class Player {
 
   updateCamera(dt) {
     // 발 높이: 계단을 오를 때는 빠르게, 내려갈 때는 떨어지듯
-    const target = this.carK >= 0 && this.carY !== null ? this.carY : stepTopY(this.phi);
-    if (target > this.footY) this.footY += (target - this.footY) * Math.min(1, dt * 16);
+    const riding = this.carK >= 0 && this.carY !== null;
+    const target = riding ? this.carY : stepTopY(this.phi);
+    if (riding) this.footY = target; // 엘리베이터 바닥에 붙어 함께 움직인다 (뒤처지면 카메라가 칸 밖으로 나감)
+    else if (target > this.footY) this.footY += (target - this.footY) * Math.min(1, dt * 16);
     else this.footY = Math.max(target, this.footY - dt * 5);
 
     const eyeT = this.crouching ? EYE_CROUCH : EYE;

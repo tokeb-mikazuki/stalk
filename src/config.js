@@ -181,7 +181,8 @@ export const DIFFICULTY = {
     sight: 6,
     hearingMul: 0.8,
     batteryDrain: 0.9,       // 손전등 배터리 소모(%/s)
-    batteries: 12,
+    batteries: 6,            // 계단에 떨어진 배터리 수
+    roomBatteries: 0.9,      // 열린 비상실 책상에 배터리가 있을 확률
     indicatorGlitch: 0.15,
     eventMin: 26, eventMax: 50,
     tripChance: 0.03,
@@ -206,7 +207,8 @@ export const DIFFICULTY = {
     sight: 8,
     hearingMul: 1.0,
     batteryDrain: 1.5,
-    batteries: 11,
+    batteries: 5,
+    roomBatteries: 0.75,
     indicatorGlitch: 0.3,
     eventMin: 20, eventMax: 40,
     tripChance: 0.06,
@@ -231,7 +233,8 @@ export const DIFFICULTY = {
     sight: 10,
     hearingMul: 1.25,
     batteryDrain: 2.0,
-    batteries: 9,
+    batteries: 4,
+    roomBatteries: 0.6,
     indicatorGlitch: 0.4,
     eventMin: 14, eventMax: 30,
     tripChance: 0.08,
@@ -256,7 +259,8 @@ export const DIFFICULTY = {
     sight: 12,
     hearingMul: 1.5,
     batteryDrain: 2.6,
-    batteries: 8,
+    batteries: 3,
+    roomBatteries: 0.5,
     indicatorGlitch: 0.6,      // 표시기를 믿기 어렵다
     eventMin: 9, eventMax: 20,
     tripChance: 0.1,
