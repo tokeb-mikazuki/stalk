@@ -367,13 +367,13 @@ export class Stalker {
     if (Math.random() < this.diff.indicatorGlitch) this.glitchT = 5; // 원작: 엘리베이터 출발 시 30% 확률 글리치
   }
 
-  /** 계단 위에서 사라졌다가 엘리베이터 안에서 다시 나타남 (초자연적 이동) */
+  /**
+   * 계단 위에서 사라졌다가, 문이 닫힌 채 서 있는 빈 엘리베이터 안에 다시 나타남 (초자연적 이동).
+   * 엘리베이터 자체는 그 자리에 있다 — 칸이 순간이동하지 않는다. 엘리베이터가 쓰이는 중이면 실패.
+   */
   teleportIntoCar(floor, game) {
     const el = game.elevator;
-    if (el.occupant === 'player') return false;
-    el.closeDoors();
-    el.floor = Math.max(0, Math.min(FLOORS - 1, floor));
-    el.target = null;
+    if (el.occupant || el.doorK >= 0 || el.closingK >= 0 || el.target !== null || el.v !== 0 || el.calls.length) return false;
     el.dest = null;
     this.elevFloor = el.floor;
     return true;
@@ -544,7 +544,7 @@ export class Stalker {
           this.elevTarget = Math.max(0, Math.min(FLOORS - 1, player.floor + this.huntOffset));
           if (this.rideSent) el.send(this.elevTarget);
         }
-        el.speedMul = this.hunting ? 2.4 : 1;
+        el.speedMul = 1; // 송신이 타도 엘리베이터는 엘리베이터 속도로 간다
         if (this.elevDelay > 0) {
           this.elevDelay -= dt;
           break;
@@ -791,13 +791,28 @@ export class Stalker {
             this.huntQueued = false;
             this.hunting = true;
             if (this.teleportIntoCar(here, game)) this.startElevatorRide(player.floor + this.huntOffset, 1.5, game);
-            else this.setState('approach');
+            else {
+              // 엘리베이터가 쓰이는 중 — 두 층 떨어진 계단참에 나타나 계단으로 온다
+              const k = Math.max(0, Math.min(FLOORS - 1, player.floor + (this.huntOffset || (player.floor < FLOORS - 2 ? 2 : -2))));
+              this.phi = landingCenter(k);
+              this.r = R_MID;
+              const b = this.belief;
+              b.phi = b.truePhi = player.inRoom ? fireDoorPhi(player.roomK) : player.phi;
+              b.t = 0;
+              b.vel = 0;
+              this.setState('approach');
+            }
           } else {
             // 멀리 떨어진 층에서 다시 시작
             let far = player.floor + (Math.random() < 0.5 ? -1 : 1) * (5 + Math.floor(Math.random() * 3));
             if (far < 0 || far >= FLOORS) far = player.floor < FLOORS / 2 ? FLOORS - 1 : 0;
-            if (this.teleportIntoCar(far, game)) this.startElevatorRide(null, 6 + Math.random() * 6, game);
-            else this.setState('approach');
+            if (Math.abs(game.elevator.floor - player.floor) >= 4 && this.teleportIntoCar(far, game)) this.startElevatorRide(null, 6 + Math.random() * 6, game);
+            else {
+              // 먼 층 계단참에 나타나 엘리베이터를 부르러 간다
+              this.phi = landingCenter(far);
+              this.r = R_MID;
+              this.goElevator(game);
+            }
           }
         }
         break;

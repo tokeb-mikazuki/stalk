@@ -245,6 +245,7 @@ export const DIFFICULTY = {
   nightmare: {
     label: '악몽',
     keyRequired: true, // 옥상 문 열쇠 (엘리베이터 안 또는 25~30층 열린 비상실)
+    strictLinger: true, // 송신이 바로 위·아래 층에 있어도 같은 층 체류 시간이 흐른다 (다른 난이도는 멈춘다)
     ai: { hear: 62, floorErr: 0.25, memory: 60, predict: 1, checkRooms: true, patience: 10, lightSense: 2, calm: 12 },
     floors: 30,
     chaseSpeed: 4.8,

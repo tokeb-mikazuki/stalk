@@ -1260,6 +1260,15 @@ class Game {
     this.stalker.onCarArrive(k, this);
   }
 
+  /** 송신이 탄 엘리베이터를 플레이어가 불렀다: 송신이 누른 층은 취소되고, 플레이어가 부른 층에서 내린다 */
+  onElevatorHijack(k) {
+    const s = this.stalker;
+    if (s.state !== 'elevator') return;
+    s.rideSent = true;
+    s.elevDelay = 0;
+    s.elevTarget = k;
+  }
+
   /** 문간에 누가 서 있으면 엘리베이터 문이 닫히지 않는다 */
   blockElevatorClose(k) {
     const p = this.player;
@@ -1280,6 +1289,7 @@ class Game {
     this.run.trapped = true;
     el.calls = [];
     el.dest = null;
+    el.hijack = null;
     el.target = null;
     el.occupant = 'player';
     // 최소 10초(10~13초)는 움직인 뒤에야 문이 열린다
@@ -1559,8 +1569,11 @@ class Game {
       p.exhausted = false;
       p.battery = 100;
     }
-    // 송신이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다
-    if (this.doorBlocked) p.floorTime = Math.max(0, p.floorTime - dt);
+    // 송신이 문 앞을 막고 있어 나갈 수 없는 시간은 '같은 층 체류'로 세지 않는다.
+    // 송신이 바로 위·아래 층(±1) 안에 있을 때도 세지 않는다 — 움직일 수 없는 상황이니까 (악몽은 예외: 그래도 흐른다)
+    const sFloor = this.stalker.inElevator ? Math.round(this.elevator.floor) : this.stalker.floor;
+    const stalkerNear = !this.diff.strictLinger && (this.stalker.visible || this.stalker.inElevator) && Math.abs(sFloor - p.floor) <= 1;
+    if (this.doorBlocked || stalkerNear) p.floorTime = Math.max(0, p.floorTime - dt);
     if (p.torchOn) this.run.torchTime += dt;
     if (p.inRoom) this.run.enteredRoom = true;
     if (ev.trip) this.run.trips++;
@@ -1664,7 +1677,7 @@ class Game {
     // ---- 엘리베이터 표시기 ----
     // 표시기: 실제 엘리베이터 위치 (송신이 탔는지는 알려주지 않는다)
     const el = this.elevator;
-    const edir = el.moving ? Math.sign(el.target - el.floor) : 0;
+    const edir = el.v !== 0 ? Math.sign(el.v) : el.moving ? Math.sign(el.target - el.floor) : 0;
     const shown = edir > 0 ? Math.floor(el.floor + 1e-6) : Math.ceil(el.floor - 1e-6);
     let ind = { text: `${shown + 1}`, dir: edir, err: false };
     if (s.glitchT > 0) {
